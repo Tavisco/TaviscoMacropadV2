@@ -2,8 +2,8 @@
 dependencies:
   ## Required IDF version
   idf:
-    version: '>=4.1.0'
   # # Put list of dependencies here
+    version: "^5.0"
   # # For components maintained by Espressif:
   # component: "~1.0.0"
   # # For 3rd party components:
@@ -14,3 +14,4 @@ dependencies:
   #   # `public` flag doesn't have an effect dependencies of the `main` component.
   #   # All dependencies of `main` are public by default.
   #   public: true
+  espressif/esp_tinyusb: ^1.7.2
