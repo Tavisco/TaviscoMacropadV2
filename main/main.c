@@ -17,13 +17,22 @@
 #include "icons.h"
 #include "macropad_conf.h"
 #include "rotary_encoder.h"
+#include "esp_timer.h"
 
 #define TAG "MAIN"
 #define APP_BUTTON (GPIO_NUM_0) // Use BOOT signal by default
 
+// Mode related variables
 const char *modes[]= {"IDE (1/2)", "Git", "Docker", "Numpad", "IoT", "Osu!", "Arrowpad", "WASD", "Multimedia", "Wiggler", "IDE (2/2)"};
 int8_t current_mode = MODE_IDE;
+
+// Encoders
 rotary_encoder_t encoder1;
+
+// Screensaver
+int64_t last_interaction_us = 0;
+bool is_in_screensaver_mode = false;
+bool is_in_low_brightness_mode = false;
 
 /************* TinyUSB descriptors ****************/
 
@@ -158,6 +167,7 @@ static void app_send_hid_demo(void)
         vTaskDelay(pdMS_TO_TICKS(20));
     }
 }
+
 
 void draw_key_lines(void) {
 	ssd1306_Line(0,36,127,36,White); // horizontal lines
@@ -311,6 +321,26 @@ void draw_ui(void)
 	draw_current_mode();
 }
 
+void update_last_interaction(void)
+{
+	last_interaction_us = esp_timer_get_time();
+
+	if (is_in_low_brightness_mode) {
+		ssd1306_SetContrast(254);
+		is_in_low_brightness_mode = false;
+	}
+
+	if (is_in_screensaver_mode) {
+		printf("Exiting from screensave mode!\r\n");
+		ssd1306_SetDisplayOn(1);
+		ssd1306_SetContrast(254);
+		draw_ui();
+		is_in_screensaver_mode = false;
+		is_in_low_brightness_mode = false;
+	}
+}
+
+
 void draw_splash(void)
 {
     ssd1306_DrawBitmap(14, 0, tavisco, 100, 100, White);
@@ -358,7 +388,7 @@ void change_current_mode(int8_t direction)
 		return;
 	}
 
-	// update_last_interaction();
+	update_last_interaction();
 
 	current_mode += direction;
 	if (current_mode == MODE_COUNT) {
@@ -371,8 +401,65 @@ void change_current_mode(int8_t direction)
 
 	// reset_variables();
 	draw_current_mode();
-	printf("Changed mode to [%s], count[%i], direction: [%i]\r\n", modes[current_mode], current_mode, direction);
+	ESP_LOGI(TAG, "Changed mode to [%s], count[%i], direction: [%i]\r\n", modes[current_mode], current_mode, direction);
 	vTaskDelay(pdMS_TO_TICKS(150));
+}
+
+void screensave_task(void)
+{
+	static int64_t last_blip_on_us = 0;
+	static int64_t last_blip_off_us = 0;
+	static bool is_blip_on = false;
+
+	if (is_in_screensaver_mode)
+	{
+		bool should_turn_on_blip = (esp_timer_get_time() - last_blip_off_us > BLIP_FREQUENCY_S) && !is_blip_on;
+		bool should_turn_off_blip = (esp_timer_get_time() - last_blip_on_us > BLIP_DURATION_MS) && is_blip_on;
+
+		if (should_turn_on_blip)
+		{
+			ssd1306_Fill(Black);
+			ssd1306_DrawPixel(0, 127, White);
+			ssd1306_UpdateScreen();
+			ssd1306_SetContrast(254);
+			ssd1306_SetDisplayOn(1);
+			last_blip_on_us = esp_timer_get_time();
+			is_blip_on = true;
+			return;
+		}
+
+		if (should_turn_off_blip)
+		{
+			ssd1306_SetDisplayOn(0);
+			last_blip_off_us = esp_timer_get_time();
+			is_blip_on = false;
+			return;
+		}
+		return;
+	}
+
+	bool should_be_in_screensave = (esp_timer_get_time()) - last_interaction_us > SCREENSAVER_TIME_S;
+	bool should_be_in_min_brightness = (esp_timer_get_time()) - last_interaction_us > (SCREENSAVER_TIME_S / 2);
+
+	if (should_be_in_min_brightness && !is_in_low_brightness_mode && !should_be_in_screensave)
+	{
+		ESP_LOGI(TAG, "Entering low brightness mode");
+		for (uint8_t i = 254; i > 0; i--) 
+		{
+			ssd1306_SetContrast(i);
+			vTaskDelay(pdMS_TO_TICKS(10));
+		}
+		
+		is_in_low_brightness_mode = true;
+	}
+
+	if (should_be_in_screensave)
+	{
+		ESP_LOGI(TAG, "Entering screensave mode");
+		is_in_screensaver_mode = true;
+		ssd1306_SetDisplayOn(0);
+		last_blip_off_us = esp_timer_get_time();
+	}
 }
 
 void app_main(void)
@@ -408,12 +495,18 @@ void app_main(void)
     ESP_LOGI(TAG, "All done! Entering main loop");
     draw_ui();
 
+	last_interaction_us = esp_timer_get_time();
+
     while (1) {
+		// Keys Task
         rotary_task(&encoder1);	// handle encoder rotation
         if (encoder1.triggered && encoder1.dir != 0) {
 			change_current_mode(encoder1.dir);
 			continue;
 		}
+		
+		screensave_task();
+		// mouse_wiggler_task();
 
         if (tud_mounted()) {
             static bool send_hid_data = false;

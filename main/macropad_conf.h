@@ -19,6 +19,6 @@
 
 
 // Preferences - Screensaver
-#define SCREENSAVER_TIME_S	60*10
-#define BLIP_FREQUENCY_S	3	// blip every X seconds
-#define BLIP_DURATION_MS 	750	// blip stays on for X ms
+#define SCREENSAVER_TIME_S	15 * 1000000 // 60 seconds * X minutes
+#define BLIP_FREQUENCY_S	3 * 1000000	// blip every X seconds
+#define BLIP_DURATION_MS 	750 * 1000	// blip stays on for X ms

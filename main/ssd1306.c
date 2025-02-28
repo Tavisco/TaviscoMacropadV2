@@ -152,6 +152,7 @@ void ssd1306_Init() {
     
     // Flush buffer to screen
     ssd1306_UpdateScreen();
+    ssd1306_SetContrast(254);
 
     // Turn on display
     ssd1306_SetDisplayOn(1);
