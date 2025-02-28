@@ -1,3 +1,7 @@
+// Encoders 
+#define GPIO_ENCODER_1_A		GPIO_NUM_6
+#define GPIO_ENCODER_1_B		GPIO_NUM_7
+
 // Modes	
 #define MODE_COUNT			11
 

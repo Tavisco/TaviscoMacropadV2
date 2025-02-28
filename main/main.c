@@ -16,12 +16,14 @@
 #include "esp_log.h"
 #include "icons.h"
 #include "macropad_conf.h"
+#include "rotary_encoder.h"
 
 #define TAG "MAIN"
 #define APP_BUTTON (GPIO_NUM_0) // Use BOOT signal by default
 
 const char *modes[]= {"IDE (1/2)", "Git", "Docker", "Numpad", "IoT", "Osu!", "Arrowpad", "WASD", "Multimedia", "Wiggler", "IDE (2/2)"};
 int8_t current_mode = MODE_IDE;
+rotary_encoder_t encoder1;
 
 /************* TinyUSB descriptors ****************/
 
@@ -199,7 +201,7 @@ void draw_keypad(const char *keys[10][4]) {
 
 void draw_current_mode(void) 
 {
-    ssd1306_FillRectangle(0, 0, 64, 14, Black);
+    ssd1306_FillRectangle(0, 0, 72, 14, Black);
     ssd1306_SetCursor(0, 3);
     ssd1306_WriteString((char *)modes[current_mode], Font_7x10, White);
     ssd1306_FillRectangle(0, 16, 128, 128, Black);
@@ -309,11 +311,8 @@ void draw_ui(void)
 	draw_current_mode();
 }
 
-void app_main(void)
+void draw_splash(void)
 {
-    ESP_LOGI(TAG, "\r\n\r\n=-=-=- Welcome to TaviscoMacropad V2! -=-=-=\r\n");
-    ESP_LOGI(TAG, "Initializing OLED");
-    ssd1306_Init();
     ssd1306_DrawBitmap(14, 0, tavisco, 100, 100, White);
     ssd1306_SetCursor(43, 105);
     ssd1306_WriteString("Tavisco", Font_7x10, White);
@@ -322,6 +321,68 @@ void app_main(void)
     ssd1306_SetCursor(112, 118);
     ssd1306_WriteString("V2", Font_6x8, White);
     ssd1306_UpdateScreen();
+}
+
+void setup_encoders(void)
+{
+    // Encoder 1
+    const gpio_config_t econder_1_a = {
+        .pin_bit_mask = BIT64(GPIO_ENCODER_1_A),
+        .mode = GPIO_MODE_INPUT,
+        .intr_type = GPIO_INTR_DISABLE,
+        .pull_up_en = true,
+        .pull_down_en = false,
+    };
+    ESP_ERROR_CHECK(gpio_config(&econder_1_a));
+    // Encoder 1
+    const gpio_config_t econder_1_b = {
+        .pin_bit_mask = BIT64(GPIO_ENCODER_1_B),
+        .mode = GPIO_MODE_INPUT,
+        .intr_type = GPIO_INTR_DISABLE,
+        .pull_up_en = true,
+        .pull_down_en = false,
+    };
+    ESP_ERROR_CHECK(gpio_config(&econder_1_b));
+
+    encoder1.gpio_a = GPIO_ENCODER_1_A;
+    encoder1.gpio_b = GPIO_ENCODER_1_B;
+    encoder1.min_value = 1;
+    encoder1.max_value = 5;
+    encoder1.factor = 1;
+    encoder1.current_value = 1;
+}
+
+void change_current_mode(int8_t direction)
+{
+	if (direction == 0) {
+		return;
+	}
+
+	// update_last_interaction();
+
+	current_mode += direction;
+	if (current_mode == MODE_COUNT) {
+		current_mode = 0;
+	}
+
+	if (current_mode < 0) {
+		current_mode = MODE_COUNT - 1;
+	}
+
+	// reset_variables();
+	draw_current_mode();
+	printf("Changed mode to [%s], count[%i], direction: [%i]\r\n", modes[current_mode], current_mode, direction);
+	vTaskDelay(pdMS_TO_TICKS(150));
+}
+
+void app_main(void)
+{
+    ESP_LOGI(TAG, "\r\n\r\n=-=-=- Welcome to TaviscoMacropad V2! -=-=-=\r\n");
+    ESP_LOGI(TAG, "Initializing OLED");
+    ssd1306_Init();
+    draw_splash();
+    ESP_LOGI(TAG, "Initializing Rotary Encoder");
+    setup_encoders();
     ESP_LOGI(TAG, "Initializing GPIO");
      // Initialize button that will trigger HID reports
      const gpio_config_t boot_button_config = {
@@ -343,31 +404,17 @@ void app_main(void)
     };
     ESP_ERROR_CHECK(tinyusb_driver_install(&tusb_cfg));
 
-    
-
-	// while (true) {
-		//tud_task();				// tinyusb device task
-		// rotary_task(&encoder);	// handle encoder rotation
-
-		// if (encoder.triggered && encoder.dir != 0) {
-		// 	change_current_mode(encoder.dir);
-		// 	continue;
-		// }
-
-		// keys_task();			// handle key presses
-		// screensave_task();
-		// mouse_wiggler_task();
-	// }
-
-
-    // ssd1306_SetCursor(0, 0);
-    // ssd1306_WriteString("Ola mundo", Font_7x10, White);
-    // ssd1306_UpdateScreen();
     vTaskDelay(pdMS_TO_TICKS(1500));
     ESP_LOGI(TAG, "All done! Entering main loop");
     draw_ui();
 
     while (1) {
+        rotary_task(&encoder1);	// handle encoder rotation
+        if (encoder1.triggered && encoder1.dir != 0) {
+			change_current_mode(encoder1.dir);
+			continue;
+		}
+
         if (tud_mounted()) {
             static bool send_hid_data = false;
             if (send_hid_data) {
@@ -376,7 +423,7 @@ void app_main(void)
             }
             send_hid_data = !gpio_get_level(APP_BUTTON);
         }
-        vTaskDelay(pdMS_TO_TICKS(100));
+        vTaskDelay(pdMS_TO_TICKS(25));
     }
 
     // printf("Restarting now.\n");
