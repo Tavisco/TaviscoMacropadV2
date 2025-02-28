@@ -18,9 +18,12 @@
 #include "macropad_conf.h"
 #include "rotary_encoder.h"
 #include "esp_timer.h"
+#include "neopixel.h"
 
+#define NEOPIXEL_PIN GPIO_NUM_48
 #define TAG "MAIN"
 #define APP_BUTTON (GPIO_NUM_0) // Use BOOT signal by default
+#define ARRAY_SIZE(x) (sizeof(x)/sizeof(x[0]))
 
 // Mode related variables
 const char *modes[]= {"IDE (1/2)", "Git", "Docker", "Numpad", "IoT", "Osu!", "Arrowpad", "WASD", "Multimedia", "Wiggler", "IDE (2/2)"};
@@ -465,6 +468,20 @@ void screensave_task(void)
 void app_main(void)
 {
     ESP_LOGI(TAG, "\r\n\r\n=-=-=- Welcome to TaviscoMacropad V2! -=-=-=\r\n");
+	tNeopixelContext neopixel = neopixel_Init(1, NEOPIXEL_PIN);
+	tNeopixel startup_pixels[] =
+	{
+		{ 0, NP_RGB(0,  1, 0) }, /* green */
+		{ 0, NP_RGB(0,  0, 0) }, /* green */
+	};
+ 
+	if(NULL == neopixel)
+	{
+	   ESP_LOGE(TAG, "[%s] Initialization failed\n", __func__);
+	} 
+
+	neopixel_SetPixel(neopixel, &startup_pixels[0], 1);
+
     ESP_LOGI(TAG, "Initializing OLED");
     ssd1306_Init();
     draw_splash();
@@ -493,6 +510,7 @@ void app_main(void)
 
     vTaskDelay(pdMS_TO_TICKS(1500));
     ESP_LOGI(TAG, "All done! Entering main loop");
+	neopixel_SetPixel(neopixel, &startup_pixels[1], 1);
     draw_ui();
 
 	last_interaction_us = esp_timer_get_time();

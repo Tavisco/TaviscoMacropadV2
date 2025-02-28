@@ -3,7 +3,7 @@ dependencies:
   ## Required IDF version
   idf:
   # # Put list of dependencies here
-    version: "^5.0"
+    version: ^5.0
   # # For components maintained by Espressif:
   # component: "~1.0.0"
   # # For 3rd party components:
@@ -15,3 +15,4 @@ dependencies:
   #   # All dependencies of `main` are public by default.
   #   public: true
   espressif/esp_tinyusb: ^1.7.2
+  zorxx/neopixel: ^1.0.7
