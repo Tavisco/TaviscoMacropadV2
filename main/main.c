@@ -158,26 +158,31 @@ static void app_send_hid_demo(void)
 }
 
 void draw_key_lines(void) {
-    ssd1306_Line(43, 16, 43, 64, White);
-    ssd1306_Line(85, 16, 85, 64, White);
-    ssd1306_Line(0, 32, 128, 32, White);
-    ssd1306_Line(0, 48, 128, 48, White);
+	ssd1306_Line(0,36,127,36,White); // horizontal lines
+	ssd1306_Line(0,60,127,60,White);
+	ssd1306_Line(0,83,127,83,White);
+	ssd1306_Line(0,106,127,106,White);
+  
+	ssd1306_Line(32,17,32,127,White); // vertical lines
+	ssd1306_Line(64,17,64,127,White);
+	ssd1306_Line(96,17,96,127,White);
 }
 
+void draw_keypad(const char *keys[10][4]) {
+    draw_key_lines();
 
-void draw_keypad(const char *keys[3][3]) {
-	draw_key_lines();
+    int x_positions[4] = {0, 34, 66, 98};
+    int y_positions[10] = {17, 17, 41, 41, 64, 64, 87, 87, 109, 109};
 
-    int x_positions[3] = {0, 43, 85};
-    int y_positions[3] = {20, 37, 53};
-
-    for (int row = 0; row < 3; row++) {
-        for (int col = 0; col < 3; col++) {
+    for (int row = 0; row < 10; row+=2) {
+        for (int col = 0; col < 4; col++) {
             if (keys[row][col]) {
                 int text_width = strlen(keys[row][col]) * 6; // Fixed 6x8 font
-                int x = x_positions[col] + (43 - text_width) / 2;
+                int x = x_positions[col];// + (16 - text_width) / 2;
                 ssd1306_SetCursor(x, y_positions[row]);
                 ssd1306_WriteString((char *)keys[row][col], Font_6x8, White);
+				ssd1306_SetCursor(x, y_positions[row]+10);
+                ssd1306_WriteString((char *)keys[row+1][col], Font_6x8, White);
             }
         }
     }
@@ -245,10 +250,21 @@ void draw_current_mode(void)
     // }
 
 	if (current_mode == MODE_IDE) {
-        const char *keys[3][3] = {
-            {"Sidebar",	"Comment",	"Impl"},
-            {"Termnl",	"Run",		"MovUp"},
-            {"DeLine",	"Compile",	"MovDown"}
+        const char *keys[10][4] = {
+            {"Side",	"Comm",	"Impl",		"A"},
+			{"bar",		"ent",	"",			""},
+
+            {"Termi",	"Run",	"Move",		"B"},
+			{"nal",		"",		"Up",		""},
+
+            {"Del",		"Com",	"Move",		"C"},
+			{"Line",	"pile",	"Down",		""},
+
+			{"D",		"E",	"F",		"G"},
+			{"",		"",		"",			""},
+
+			{"H",		"I",	"J",		"K"},
+			{"",		"",		"",			""},
         };
         draw_keypad(keys);
     }
