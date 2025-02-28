@@ -177,12 +177,21 @@ void draw_keypad(const char *keys[10][4]) {
     for (int row = 0; row < 10; row+=2) {
         for (int col = 0; col < 4; col++) {
             if (keys[row][col]) {
-                int text_width = strlen(keys[row][col]) * 6; // Fixed 6x8 font
-                int x = x_positions[col];// + (16 - text_width) / 2;
-                ssd1306_SetCursor(x, y_positions[row]);
-                ssd1306_WriteString((char *)keys[row][col], Font_6x8, White);
-				ssd1306_SetCursor(x, y_positions[row]+10);
-                ssd1306_WriteString((char *)keys[row+1][col], Font_6x8, White);
+				// if there is second row
+				if (keys[row+1][col]) {
+					int text_width = strlen(keys[row+1][col]) * 6; // Fixed 6x8 font
+					int x = x_positions[col] + (31 - text_width) / 2;
+					ssd1306_SetCursor(x, y_positions[row]+10);
+					ssd1306_WriteString((char *)keys[row+1][col], Font_6x8, White);
+					text_width = strlen(keys[row][col]) * 6; // Fixed 6x8 font
+					x = x_positions[col] + (33 - text_width) / 2;
+					ssd1306_SetCursor(x, y_positions[row]);
+				} else {
+					int text_width = strlen(keys[row][col]) * 6; // Fixed 6x8 font
+					int x = x_positions[col] + (33 - text_width) / 2;
+					ssd1306_SetCursor(x, y_positions[row]+5);
+				}
+				ssd1306_WriteString((char *)keys[row][col], Font_6x8, White);
             }
         }
     }
@@ -252,19 +261,19 @@ void draw_current_mode(void)
 	if (current_mode == MODE_IDE) {
         const char *keys[10][4] = {
             {"Side",	"Comm",	"Impl",		"A"},
-			{"bar",		"ent",	"",			""},
+			{"bar",		"ent",	NULL,		NULL},
 
             {"Termi",	"Run",	"Move",		"B"},
-			{"nal",		"",		"Up",		""},
+			{"nal",		NULL,	"Up",		NULL},
 
             {"Del",		"Com",	"Move",		"C"},
-			{"Line",	"pile",	"Down",		""},
+			{"Line",	"pile",	"Down",		NULL},
 
 			{"D",		"E",	"F",		"G"},
-			{"",		"",		"",			""},
+			{NULL,		NULL,	NULL,		NULL},
 
 			{"H",		"I",	"J",		"K"},
-			{"",		"",		"",			""},
+			{NULL,		NULL,	NULL,		NULL},
         };
         draw_keypad(keys);
     }

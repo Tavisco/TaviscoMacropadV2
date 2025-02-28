@@ -147,14 +147,14 @@ void ssd1306_Init() {
     // Short delay for stability
     vTaskDelay(pdMS_TO_TICKS(10));
 
-    // Turn on display
-    ssd1306_SetDisplayOn(1);
-
     // Clear screen
     ssd1306_Fill(Black);
     
     // Flush buffer to screen
     ssd1306_UpdateScreen();
+
+    // Turn on display
+    ssd1306_SetDisplayOn(1);
     
     // Set default values for screen object
     SSD1306.CurrentX = 0;
