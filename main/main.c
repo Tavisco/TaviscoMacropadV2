@@ -21,13 +21,16 @@
 #include "neopixel.h"
 
 #define NEOPIXEL_PIN GPIO_NUM_48
-#define TAG "MAIN"
+#define MAIN_TAG "MAIN"
+#define SETUP_TAG "SETUP"
+#define SCREENSAVER_TAG "SCREENSAVER"
 #define APP_BUTTON (GPIO_NUM_0) // Use BOOT signal by default
 #define ARRAY_SIZE(x) (sizeof(x)/sizeof(x[0]))
 
 // Mode related variables
 const char *modes[]= {"IDE (1/2)", "Git", "Docker", "Numpad", "IoT", "Osu!", "Arrowpad", "WASD", "Multimedia", "Wiggler", "IDE (2/2)"};
 int8_t current_mode = MODE_IDE;
+bool mouse_wiggler_enabled = true;
 
 // Encoders
 rotary_encoder_t encoder1;
@@ -153,14 +156,14 @@ static void mouse_draw_square_next_delta(int8_t *delta_x_ret, int8_t *delta_y_re
 static void app_send_hid_demo(void)
 {
     // Keyboard output: Send key 'a/A' pressed and released
-    ESP_LOGI(TAG, "Sending Keyboard report");
+    ESP_LOGI(MAIN_TAG, "Sending Keyboard report");
     uint8_t keycode[6] = {HID_KEY_A};
     tud_hid_keyboard_report(HID_ITF_PROTOCOL_KEYBOARD, 0, keycode);
     vTaskDelay(pdMS_TO_TICKS(50));
     tud_hid_keyboard_report(HID_ITF_PROTOCOL_KEYBOARD, 0, NULL);
 
     // Mouse output: Move mouse cursor in square trajectory
-    ESP_LOGI(TAG, "Sending Mouse report");
+    ESP_LOGI(MAIN_TAG, "Sending Mouse report");
     int8_t delta_x;
     int8_t delta_y;
     for (int i = 0; i < (DISTANCE_MAX / DELTA_SCALAR) * 4; i++) {
@@ -170,7 +173,6 @@ static void app_send_hid_demo(void)
         vTaskDelay(pdMS_TO_TICKS(20));
     }
 }
-
 
 void draw_key_lines(void) {
 	ssd1306_Line(0,36,127,36,White); // horizontal lines
@@ -212,6 +214,20 @@ void draw_keypad(const char *keys[10][4]) {
     }
 }
 
+void draw_custom_mouse_wiggler(void)
+{
+    if (mouse_wiggler_enabled) {
+        ssd1306_SetCursor(48, 17);
+        ssd1306_WriteString("ON", Font_16x26, White);
+    } else {
+        ssd1306_SetCursor(40, 17);
+        ssd1306_WriteString("OFF", Font_16x26, White);
+    }
+    
+    ssd1306_SetCursor(10, 56);
+    ssd1306_WriteString("Any key to toggle", Font_6x8, White);
+}
+
 void draw_current_mode(void) 
 {
     ssd1306_FillRectangle(0, 0, 72, 14, Black);
@@ -232,10 +248,10 @@ void draw_current_mode(void)
 	// 	draw_custom_osu();
 	// }
 
-	// if (current_mode == MODE_MOUSE_WIGGLER)
-	// {
-	// 	draw_custom_mouse_wiggler();
-	// }
+	if (current_mode == MODE_MOUSE_WIGGLER)
+	{
+		draw_custom_mouse_wiggler();
+	}
 
     // if (current_mode == MODE_GIT) {
     //     const char *keys[3][3] = {
@@ -305,9 +321,14 @@ void draw_current_mode(void)
     ssd1306_UpdateScreen();
 }
 
+void reset_variables(void)
+{
+	mouse_wiggler_enabled = true; // TODO: Should be false
+}
+
 void draw_ui(void)
 {
-	ESP_LOGI(TAG, "Drawing UI\r\n");
+	ESP_LOGI(MAIN_TAG, "Drawing UI\r\n");
     ssd1306_Fill(Black);
 	// oled_screen.drawLine(0,15,128,15,WHITE);
     ssd1306_Line(0, 15, 128, 15, White);
@@ -334,7 +355,7 @@ void update_last_interaction(void)
 	}
 
 	if (is_in_screensaver_mode) {
-		printf("Exiting from screensave mode!\r\n");
+        ESP_LOGI(SCREENSAVER_TAG, "Exiting from screensave mode!");
 		ssd1306_SetDisplayOn(1);
 		ssd1306_SetContrast(254);
 		draw_ui();
@@ -342,7 +363,6 @@ void update_last_interaction(void)
 		is_in_low_brightness_mode = false;
 	}
 }
-
 
 void draw_splash(void)
 {
@@ -354,35 +374,6 @@ void draw_splash(void)
     ssd1306_SetCursor(112, 118);
     ssd1306_WriteString("V2", Font_6x8, White);
     ssd1306_UpdateScreen();
-}
-
-void setup_encoders(void)
-{
-    // Encoder 1
-    const gpio_config_t econder_1_a = {
-        .pin_bit_mask = BIT64(GPIO_ENCODER_1_A),
-        .mode = GPIO_MODE_INPUT,
-        .intr_type = GPIO_INTR_DISABLE,
-        .pull_up_en = true,
-        .pull_down_en = false,
-    };
-    ESP_ERROR_CHECK(gpio_config(&econder_1_a));
-    // Encoder 1
-    const gpio_config_t econder_1_b = {
-        .pin_bit_mask = BIT64(GPIO_ENCODER_1_B),
-        .mode = GPIO_MODE_INPUT,
-        .intr_type = GPIO_INTR_DISABLE,
-        .pull_up_en = true,
-        .pull_down_en = false,
-    };
-    ESP_ERROR_CHECK(gpio_config(&econder_1_b));
-
-    encoder1.gpio_a = GPIO_ENCODER_1_A;
-    encoder1.gpio_b = GPIO_ENCODER_1_B;
-    encoder1.min_value = 1;
-    encoder1.max_value = 5;
-    encoder1.factor = 1;
-    encoder1.current_value = 1;
 }
 
 void change_current_mode(int8_t direction)
@@ -402,9 +393,9 @@ void change_current_mode(int8_t direction)
 		current_mode = MODE_COUNT - 1;
 	}
 
-	// reset_variables();
+	reset_variables();
 	draw_current_mode();
-	ESP_LOGI(TAG, "Changed mode to [%s], count[%i], direction: [%i]\r\n", modes[current_mode], current_mode, direction);
+	ESP_LOGI(MAIN_TAG, "Changed mode to [%s], count[%i], direction: [%i]\r\n", modes[current_mode], current_mode, direction);
 	vTaskDelay(pdMS_TO_TICKS(150));
 }
 
@@ -446,7 +437,7 @@ void screensave_task(void)
 
 	if (should_be_in_min_brightness && !is_in_low_brightness_mode && !should_be_in_screensave)
 	{
-		ESP_LOGI(TAG, "Entering low brightness mode");
+		ESP_LOGI(SCREENSAVER_TAG, "Entering low brightness mode");
 		for (uint8_t i = 254; i > 0; i--) 
 		{
 			ssd1306_SetContrast(i);
@@ -458,16 +449,143 @@ void screensave_task(void)
 
 	if (should_be_in_screensave)
 	{
-		ESP_LOGI(TAG, "Entering screensave mode");
+		ESP_LOGI(SCREENSAVER_TAG, "Entering screensave mode");
 		is_in_screensaver_mode = true;
 		ssd1306_SetDisplayOn(0);
 		last_blip_off_us = esp_timer_get_time();
 	}
 }
 
+void mouse_wiggler_task(void)
+{
+	if (current_mode != MODE_MOUSE_WIGGLER)
+		return;
+
+	// bool const keys_pressed = keyboard.update(current_mode);
+	// if (keys_pressed)
+	// {
+	// 	mouse_wiggler_enabled = !mouse_wiggler_enabled;
+	// 	sleep_ms(150);
+	// 	draw_ui();
+	// 	update_last_interaction();
+	// }
+
+	// if (!mouse_wiggler_enabled)
+	// 	return;
+
+	// skip if hid is not ready yet
+	if (!tud_hid_ready())
+	{
+		return;
+	}
+
+	static int16_t current_x = 0;
+	static int8_t delta_x = 1;
+	static bool x_is_forward = true;
+	static int8_t delta_y = 0;
+
+	if (current_x == 256 && x_is_forward)
+	{
+		delta_x = -1;
+		x_is_forward = false;
+	}
+
+	if (current_x == 0 && !x_is_forward)
+	{
+		delta_x = 1;
+		x_is_forward = true;
+	}
+
+	current_x += delta_x;
+	tud_hid_mouse_report(HID_ITF_PROTOCOL_MOUSE, 0x00, delta_x, delta_y, 0, 0);
+}
+
+static void IRAM_ATTR rotary_isr_handler(void *arg) {
+    rotary_encoder_t *encoder = (rotary_encoder_t *)arg;
+    BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+
+    encoder->triggered = 1;  // Mark it as triggered
+    encoder->wait_until = esp_timer_get_time() + DEBOUNCE_EDGE;
+
+    // Wake up the processing task
+    vTaskNotifyGiveFromISR(encoder->task_handle, &xHigherPriorityTaskWoken);
+
+    if (xHigherPriorityTaskWoken) {
+        portYIELD_FROM_ISR();  // Force a context switch if needed
+    }
+}
+
+void setup_encoders(void)
+{
+    // Encoder 1
+    const gpio_config_t econder_1_a = {
+        .pin_bit_mask = BIT64(GPIO_ENCODER_1_A),
+        .mode = GPIO_MODE_INPUT,
+        .intr_type = GPIO_INTR_DISABLE,
+        .pull_up_en = true,
+        .pull_down_en = false,
+    };
+    ESP_ERROR_CHECK(gpio_config(&econder_1_a));
+    // Encoder 1
+    const gpio_config_t econder_1_b = {
+        .pin_bit_mask = BIT64(GPIO_ENCODER_1_B),
+        .mode = GPIO_MODE_INPUT,
+        .intr_type = GPIO_INTR_DISABLE,
+        .pull_up_en = true,
+        .pull_down_en = false,
+    };
+    ESP_ERROR_CHECK(gpio_config(&econder_1_b));
+
+    encoder1.gpio_a = GPIO_ENCODER_1_A;
+    encoder1.gpio_b = GPIO_ENCODER_1_B;
+    encoder1.min_value = 1;
+    encoder1.max_value = 5;
+    encoder1.factor = 1;
+    encoder1.current_value = 1;
+
+    // Install ISR service if not already done
+    gpio_set_intr_type(GPIO_ENCODER_1_A, GPIO_INTR_POSEDGE);
+    ESP_ERROR_CHECK(gpio_install_isr_service(ESP_INTR_FLAG_EDGE));
+    ESP_ERROR_CHECK(gpio_isr_handler_add(GPIO_ENCODER_1_A, rotary_isr_handler, (void *)&encoder1));
+}
+
+void rotaryTask(void *arg) {
+    rotary_encoder_t *encoder = (rotary_encoder_t *)arg;
+    encoder->task_handle = xTaskGetCurrentTaskHandle(); // Store task handle for notifications
+
+    ESP_LOGI(SETUP_TAG, "ROTARY TASK INITIATED");
+
+    while (true) {
+        // Wait for an interrupt notification
+        ulTaskNotifyTake(pdTRUE, portMAX_DELAY);  // Block until notified
+        rotary_task(encoder); // Process encoder movement
+        if (encoder->triggered && encoder->dir != 0) {
+            change_current_mode(encoder->dir);
+        }
+    }
+}
+
+void mainTask() {
+    while (1) {
+		// Keys Task
+		screensave_task();
+		mouse_wiggler_task();
+
+        if (tud_mounted()) {
+            static bool send_hid_data = false;
+            if (send_hid_data) {
+                app_send_hid_demo();
+                draw_ui();
+            }
+            send_hid_data = !gpio_get_level(APP_BUTTON);
+        }
+        vTaskDelay(pdMS_TO_TICKS(15));
+    }
+}
+
 void app_main(void)
 {
-    ESP_LOGI(TAG, "\r\n\r\n=-=-=- Welcome to TaviscoMacropad V2! -=-=-=\r\n");
+    ESP_LOGI(SETUP_TAG, "\r\n\r\n=-=-=- Welcome to TaviscoMacropad V2! -=-=-=\r\n");
 	tNeopixelContext neopixel = neopixel_Init(1, NEOPIXEL_PIN);
 	tNeopixel startup_pixels[] =
 	{
@@ -477,17 +595,17 @@ void app_main(void)
  
 	if(NULL == neopixel)
 	{
-	   ESP_LOGE(TAG, "[%s] Initialization failed\n", __func__);
+	   ESP_LOGE(SETUP_TAG, "[%s] Initialization failed\n", __func__);
 	} 
 
 	neopixel_SetPixel(neopixel, &startup_pixels[0], 1);
 
-    ESP_LOGI(TAG, "Initializing OLED");
+    ESP_LOGI(SETUP_TAG, "Initializing OLED");
     ssd1306_Init();
     draw_splash();
-    ESP_LOGI(TAG, "Initializing Rotary Encoder");
+    ESP_LOGI(SETUP_TAG, "Initializing Rotary Encoder");
     setup_encoders();
-    ESP_LOGI(TAG, "Initializing GPIO");
+    ESP_LOGI(SETUP_TAG, "Initializing GPIO");
      // Initialize button that will trigger HID reports
      const gpio_config_t boot_button_config = {
         .pin_bit_mask = BIT64(APP_BUTTON),
@@ -498,7 +616,7 @@ void app_main(void)
     };
     ESP_ERROR_CHECK(gpio_config(&boot_button_config));
 
-    ESP_LOGI(TAG, "Initializing USB");
+    ESP_LOGI(SETUP_TAG, "Initializing USB");
     const tinyusb_config_t tusb_cfg = {
         .device_descriptor = NULL,
         .string_descriptor = hid_string_descriptor,
@@ -507,37 +625,14 @@ void app_main(void)
         .configuration_descriptor = hid_configuration_descriptor,
     };
     ESP_ERROR_CHECK(tinyusb_driver_install(&tusb_cfg));
-
     vTaskDelay(pdMS_TO_TICKS(1500));
-    ESP_LOGI(TAG, "All done! Entering main loop");
+
+    ESP_LOGI(SETUP_TAG, "Drawing UI");
 	neopixel_SetPixel(neopixel, &startup_pixels[1], 1);
     draw_ui();
-
 	last_interaction_us = esp_timer_get_time();
-
-    while (1) {
-		// Keys Task
-        rotary_task(&encoder1);	// handle encoder rotation
-        if (encoder1.triggered && encoder1.dir != 0) {
-			change_current_mode(encoder1.dir);
-			continue;
-		}
-		
-		screensave_task();
-		// mouse_wiggler_task();
-
-        if (tud_mounted()) {
-            static bool send_hid_data = false;
-            if (send_hid_data) {
-                app_send_hid_demo();
-                draw_ui();
-            }
-            send_hid_data = !gpio_get_level(APP_BUTTON);
-        }
-        vTaskDelay(pdMS_TO_TICKS(25));
-    }
-
-    // printf("Restarting now.\n");
-    // fflush(stdout);
-    // esp_restart();
+    ESP_LOGI(SETUP_TAG, "All done! Entering main loop");
+    
+    xTaskCreatePinnedToCore(mainTask, "MainTask", 4096, NULL, 1, NULL, 1);
+    xTaskCreatePinnedToCore(rotaryTask, "RotaryTask", 4096, (void *)&encoder1, 1, NULL, 1);
 }
