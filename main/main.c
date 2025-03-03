@@ -19,6 +19,8 @@
 #include "rotary_encoder.h"
 #include "esp_timer.h"
 #include "neopixel.h"
+#include <math.h>
+
 
 #define NEOPIXEL_PIN GPIO_NUM_48
 #define MAIN_TAG "Main"
@@ -29,12 +31,15 @@
 #define ARRAY_SIZE(x) (sizeof(x)/sizeof(x[0]))
 
 // Mode related variables
-const char *modes[]= {"IDE (1/2)", "Git", "Docker", "Numpad", "IoT", "Osu!", "Arrowpad", "WASD", "Multimedia", "Wiggler", "IDE (2/2)"};
+const char *modes[]= {"IDE", "Git", "Docker", "Numpad", "IoT", "Osu!", "Arrowpad", "WASD", "Multimedia", "Wiggler"};
 int8_t current_mode = MODE_IDE;
 bool mouse_wiggler_enabled = true;
 
 // Encoders
 rotary_encoder_t encoder1;
+
+// Neopixel
+tNeopixelContext neopixel;
 
 // Screensaver
 int64_t last_interaction_us = 0;
@@ -175,6 +180,29 @@ static void app_send_hid_demo(void)
 	}
 }
 
+void neopixel_BreatheEffect(tNeopixelContext neopixel, uint16_t duration_ms)
+{
+	const uint8_t max_brightness = 255;
+	const uint8_t min_brightness = 0;
+	const float step_count = 50.0f;  // Number of steps for the entire effect
+	const float step_delay = duration_ms / step_count; // Time per step
+
+	for (int i = 0; i <= step_count; i++)
+	{
+		// Smooth fade-in and fade-out in a single pass
+		float phase = (float)i / step_count * M_PI; // 0 to π for one breath
+		uint8_t brightness = (uint8_t)(min_brightness + (max_brightness * sin(phase)));
+
+		tNeopixel pixel = {0, NP_RGB(brightness, 0, 0)}; // Green with varying brightness
+		neopixel_SetPixel(neopixel, &pixel, 1);
+		vTaskDelay(pdMS_TO_TICKS(step_delay));
+	}
+
+	// Turn off after the effect is completed
+	tNeopixel off_pixel = {0, NP_RGB(0, 0, 0)};
+	neopixel_SetPixel(neopixel, &off_pixel, 1);
+}
+
 void draw_key_lines(void) {
 	ssd1306_Line(0,36,127,36,White); // horizontal lines
 	ssd1306_Line(0,60,127,60,White);
@@ -292,20 +320,20 @@ void draw_current_mode(void)
 
 	if (current_mode == MODE_IDE) {
 		const char *keys[10][4] = {
-			{"Side",	"Comm",	"Impl",		"Refs"},
-			{"bar",		"ent",	NULL,		NULL},
+			{NULL,		NULL,		NULL,		NULL},
+			{NULL,		NULL,		NULL,		NULL},
 
-			{"Del",		"Run",	"Move",		"Splt"},
-			{"Line",	NULL,	"Up",		NULL},
+			{NULL,		"Del",		"Refs",		"Splt"},
+			{NULL,		"Line"	,	NULL,		NULL},
 
-			{NULL,		"Com",	"Move",		"Splt"},
-			{NULL,		"pile",	"Down",		"MoveR"},
+			{"Move",	"Side",		"Impl",		"Splt"},
+			{"Up",		"bar",		NULL,		"MoveR"},
 
-			{NULL,		NULL,	"Re",		"Org"},
-			{NULL,		NULL,	"name",		"Imprt"},
+			{"Move",	"Comm",		"Re",		"Run"},
+			{"Down",	"ent",		"name",		NULL},
 
-			{NULL,		NULL,	"Term",	"Fmt"},
-			{NULL,		NULL,	"inal",		"Code"},
+			{"Fmt",		"Org",		"Term",		"Com"},
+			{"Code",	"Imprt",	"inal",		"pile"},
 		};
 		draw_keypad(keys);
 	}
@@ -402,60 +430,44 @@ void change_current_mode(int8_t direction)
 
 void screensave_task()
 {
+	static int64_t last_blip_off_us = 0;
+
 	while (1)
 	{
-		static int64_t last_blip_on_us = 0;
-		static int64_t last_blip_off_us = 0;
-		static bool is_blip_on = false;
+		int64_t now = esp_timer_get_time();
 
 		if (is_in_screensaver_mode)
 		{
-			bool should_turn_on_blip = (esp_timer_get_time() - last_blip_off_us > BLIP_FREQUENCY_S) && !is_blip_on;
-			bool should_turn_off_blip = (esp_timer_get_time() - last_blip_on_us > BLIP_DURATION_MS) && is_blip_on;
-
-			if (should_turn_on_blip)
+			if (now - last_blip_off_us > BLIP_FREQUENCY_S)
 			{
-				ssd1306_Fill(Black);
-				ssd1306_DrawPixel(0, 127, White);
-				ssd1306_UpdateScreen();
-				ssd1306_SetContrast(254);
-				ssd1306_SetDisplayOn(1);
-				last_blip_on_us = esp_timer_get_time();
-				is_blip_on = true;
-				return;
-			}
-
-			if (should_turn_off_blip)
-			{
-				ssd1306_SetDisplayOn(0);
+				neopixel_BreatheEffect(neopixel, 3750);
 				last_blip_off_us = esp_timer_get_time();
-				is_blip_on = false;
-				return;
 			}
-			return;
 		}
-
-		bool should_be_in_screensave = (esp_timer_get_time()) - last_interaction_us > SCREENSAVER_TIME_S;
-		bool should_be_in_min_brightness = (esp_timer_get_time()) - last_interaction_us > (SCREENSAVER_TIME_S / 2);
-
-		if (should_be_in_min_brightness && !is_in_low_brightness_mode && !should_be_in_screensave)
+		else
 		{
-			ESP_LOGI(SCREENSAVER_TAG, "Entering low brightness mode");
-			for (uint8_t i = 254; i > 0; i--) 
+			int64_t time_since_last_interaction = now - last_interaction_us;
+			bool should_be_in_screensave = time_since_last_interaction > SCREENSAVER_TIME_S;
+			bool should_be_in_min_brightness = time_since_last_interaction > (SCREENSAVER_TIME_S / 2);
+
+			if (should_be_in_min_brightness && !is_in_low_brightness_mode && !should_be_in_screensave)
 			{
-				ssd1306_SetContrast(i);
-				vTaskDelay(pdMS_TO_TICKS(10));
+				ESP_LOGI(SCREENSAVER_TAG, "Entering low brightness mode");
+				for (uint8_t i = 254; i > 0; i--) 
+				{
+					ssd1306_SetContrast(i);
+					vTaskDelay(pdMS_TO_TICKS(10));
+				}
+				is_in_low_brightness_mode = true;
 			}
-			
-			is_in_low_brightness_mode = true;
-		}
 
-		if (should_be_in_screensave)
-		{
-			ESP_LOGI(SCREENSAVER_TAG, "Entering screensave mode");
-			is_in_screensaver_mode = true;
-			ssd1306_SetDisplayOn(0);
-			last_blip_off_us = esp_timer_get_time();
+			if (should_be_in_screensave)
+			{
+				ESP_LOGI(SCREENSAVER_TAG, "Entering screensave mode");
+				is_in_screensaver_mode = true;
+				ssd1306_SetDisplayOn(0);
+				last_blip_off_us = now;
+			}
 		}
 
 		vTaskDelay(pdMS_TO_TICKS(15));
@@ -599,7 +611,7 @@ void mainTask() {
 void app_main(void)
 {
 	ESP_LOGI(SETUP_TAG, "\r\n\r\n=-=-=- Welcome to TaviscoMacropad V2! -=-=-=\r\n");
-	tNeopixelContext neopixel = neopixel_Init(1, NEOPIXEL_PIN);
+	neopixel = neopixel_Init(1, NEOPIXEL_PIN);
 	tNeopixel startup_pixels[] =
 	{
 		{ 0, NP_RGB(0,  255, 0) }, /* green */
