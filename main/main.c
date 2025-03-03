@@ -20,6 +20,7 @@
 #include "esp_timer.h"
 #include "neopixel.h"
 #include <math.h>
+#include <semphr.h>
 
 
 #define NEOPIXEL_PIN GPIO_NUM_48
@@ -45,6 +46,9 @@ tNeopixelContext neopixel;
 int64_t last_interaction_us = 0;
 bool is_in_screensaver_mode = false;
 bool is_in_low_brightness_mode = false;
+
+// Keyboard
+SemaphoreHandle_t kbscan_mutex;
 
 /************* TinyUSB descriptors ****************/
 
@@ -178,6 +182,77 @@ static void app_send_hid_demo(void)
 		tud_hid_mouse_report(HID_ITF_PROTOCOL_MOUSE, 0x00, delta_x, delta_y, 0, 0);
 		vTaskDelay(pdMS_TO_TICKS(20));
 	}
+}
+
+
+uint8_t this_sw_state[SW_COUNT];
+uint8_t last_sw_state[SW_COUNT];
+uint32_t last_press_ts[SW_COUNT];
+
+uint8_t rowcol_to_index(uint8_t row, uint8_t col)
+{
+	if(row >= SW_MATRIX_NUM_ROWS || col >= SW_MATRIX_NUM_COLS)
+		return 0;
+	return row*SW_MATRIX_NUM_COLS + col;
+}
+
+void scan_row(uint8_t *sw_buf, uint8_t this_col)
+{
+	sw_buf[rowcol_to_index(0, this_col)] = gpio_get_level(SWM_ROW0_GPIO);
+	sw_buf[rowcol_to_index(1, this_col)] = gpio_get_level(SWM_ROW1_GPIO);
+	sw_buf[rowcol_to_index(2, this_col)] = gpio_get_level(SWM_ROW2_GPIO);
+	sw_buf[rowcol_to_index(3, this_col)] = gpio_get_level(SWM_ROW3_GPIO);
+	sw_buf[rowcol_to_index(4, this_col)] = gpio_get_level(SWM_ROW4_GPIO);
+}
+
+void sw_matrix_col_reset(void)
+{
+	gpio_set_level(SWM_COL0_GPIO, 0);
+	gpio_set_level(SWM_COL1_GPIO, 0);
+	gpio_set_level(SWM_COL2_GPIO, 0);
+	gpio_set_level(SWM_COL3_GPIO, 0);
+}
+
+void sw_scan(void)
+{
+	if(xSemaphoreTake(kbscan_mutex, pdMS_TO_TICKS(KBSCAN_MUTEX_TIMEOUT_MS)) == pdFALSE)
+    	return;
+
+	gpio_set_level(SWM_COL0_GPIO, 1);
+	gpio_set_level(SWM_COL1_GPIO, 0);
+	gpio_set_level(SWM_COL2_GPIO, 0);
+	gpio_set_level(SWM_COL3_GPIO, 0);
+	vTaskDelay(pdMS_TO_TICKS(1));
+	scan_row(this_sw_state, 0);
+
+	gpio_set_level(SWM_COL0_GPIO, 0);
+	gpio_set_level(SWM_COL1_GPIO, 1);
+	gpio_set_level(SWM_COL2_GPIO, 0);
+	gpio_set_level(SWM_COL3_GPIO, 0);
+	vTaskDelay(pdMS_TO_TICKS(1));
+	scan_row(this_sw_state, 1);
+
+	gpio_set_level(SWM_COL0_GPIO, 0);
+	gpio_set_level(SWM_COL1_GPIO, 0);
+	gpio_set_level(SWM_COL2_GPIO, 1);
+	gpio_set_level(SWM_COL3_GPIO, 0);
+	vTaskDelay(pdMS_TO_TICKS(1));
+	scan_row(this_sw_state, 2);
+
+	gpio_set_level(SWM_COL0_GPIO, 0);
+	gpio_set_level(SWM_COL1_GPIO, 0);
+	gpio_set_level(SWM_COL2_GPIO, 0);
+	gpio_set_level(SWM_COL3_GPIO, 1);
+	vTaskDelay(pdMS_TO_TICKS(1));
+	scan_row(this_sw_state, 3);
+
+	sw_matrix_col_reset(); // need time to settle, do not remove
+	vTaskDelay(pdMS_TO_TICKS(1));
+
+	this_sw_state[ENCODER_1_BTN] = 1 - gpio_get_level(GPIO_ENCODER_1_BTN);
+	this_sw_state[ENCODER_2_BTN] = 1 - gpio_get_level(GPIO_ENCODER_2_BTN);
+
+	xSemaphoreGive(kbscan_mutex);
 }
 
 void neopixel_BreatheEffect(tNeopixelContext neopixel, uint16_t duration_ms)
@@ -543,36 +618,17 @@ static void IRAM_ATTR rotary_isr_handler(void *arg) {
 
 void setup_encoders()
 {
-	// Encoder 1
-	const gpio_config_t econder_1_a = {
-		.pin_bit_mask = BIT64(GPIO_ENCODER_1_A),
-		.mode = GPIO_MODE_INPUT,
-		.intr_type = GPIO_INTR_DISABLE,
-		.pull_up_en = true,
-		.pull_down_en = false,
-	};
-	ESP_ERROR_CHECK(gpio_config(&econder_1_a));
-	// Encoder 1
-	const gpio_config_t econder_1_b = {
-		.pin_bit_mask = BIT64(GPIO_ENCODER_1_B),
-		.mode = GPIO_MODE_INPUT,
-		.intr_type = GPIO_INTR_DISABLE,
-		.pull_up_en = true,
-		.pull_down_en = false,
-	};
-	ESP_ERROR_CHECK(gpio_config(&econder_1_b));
-
-	encoder1.gpio_a = GPIO_ENCODER_1_A;
-	encoder1.gpio_b = GPIO_ENCODER_1_B;
+	encoder1.gpio_a = GPIO_ENCODER_2_A;
+	encoder1.gpio_b = GPIO_ENCODER_2_B;
 	encoder1.min_value = 1;
 	encoder1.max_value = 5;
 	encoder1.factor = 1;
 	encoder1.current_value = 1;
 
 	// Install ISR service if not already done
-	ESP_ERROR_CHECK(gpio_set_intr_type(GPIO_ENCODER_1_A, GPIO_INTR_ANYEDGE));
+	ESP_ERROR_CHECK(gpio_set_intr_type(GPIO_ENCODER_2_A, GPIO_INTR_ANYEDGE));
 	ESP_ERROR_CHECK(gpio_install_isr_service(ESP_INTR_FLAG_EDGE));
-	ESP_ERROR_CHECK(gpio_isr_handler_add(GPIO_ENCODER_1_A, rotary_isr_handler, (void *)&encoder1));
+	ESP_ERROR_CHECK(gpio_isr_handler_add(GPIO_ENCODER_2_A, rotary_isr_handler, (void *)&encoder1));
 }
 
 void rotaryTask(void *arg) {
@@ -608,6 +664,24 @@ void mainTask() {
 	}
 }
 
+void setup_gpio()
+{
+	const gpio_num_t GPIOS[]= {SWM_COL0_GPIO, SWM_COL1_GPIO, SWM_COL2_GPIO, SWM_COL3_GPIO, SWM_ROW0_GPIO, SWM_ROW1_GPIO, SWM_ROW2_GPIO, SWM_ROW3_GPIO, SWM_ROW4_GPIO, GPIO_ENCODER_1_BTN, GPIO_ENCODER_2_BTN, GPIO_ENCODER_1_A, GPIO_ENCODER_1_B, GPIO_ENCODER_2_A, GPIO_ENCODER_2_B};
+
+	for (uint8_t i = 0; i < ARRAY_SIZE(GPIOS); i++)
+	{
+		const gpio_config_t boot_button_config = {
+			.pin_bit_mask = BIT64(GPIOS[i]),
+			.mode = GPIO_MODE_INPUT,
+			.intr_type = GPIO_INTR_DISABLE,
+			.pull_up_en = true,
+			.pull_down_en = false,
+		};
+		ESP_ERROR_CHECK(gpio_config(&boot_button_config));
+		vTaskDelay(pdMS_TO_TICKS(5));
+	}
+}
+
 void app_main(void)
 {
 	ESP_LOGI(SETUP_TAG, "\r\n\r\n=-=-=- Welcome to TaviscoMacropad V2! -=-=-=\r\n");
@@ -622,24 +696,17 @@ void app_main(void)
 	{
 	   ESP_LOGE(SETUP_TAG, "[%s] Initialization failed\n", __func__);
 	} 
-
 	neopixel_SetPixel(neopixel, &startup_pixels[0], 1);
 
 	ESP_LOGI(SETUP_TAG, "Initializing OLED");
 	ssd1306_Init();
 	draw_splash();
+
+	ESP_LOGI(SETUP_TAG, "Initializing GPIO");
+	setup_gpio();
+
 	ESP_LOGI(SETUP_TAG, "Initializing Rotary Encoder");
 	setup_encoders();
-	ESP_LOGI(SETUP_TAG, "Initializing GPIO");
-	 // Initialize button that will trigger HID reports
-	 const gpio_config_t boot_button_config = {
-		.pin_bit_mask = BIT64(APP_BUTTON),
-		.mode = GPIO_MODE_INPUT,
-		.intr_type = GPIO_INTR_DISABLE,
-		.pull_up_en = true,
-		.pull_down_en = false,
-	};
-	ESP_ERROR_CHECK(gpio_config(&boot_button_config));
 
 	ESP_LOGI(SETUP_TAG, "Initializing USB");
 	const tinyusb_config_t tusb_cfg = {
