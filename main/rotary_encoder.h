@@ -2,7 +2,7 @@
 #define ROTARY_ENCODER_H
 
 #include "freertos/FreeRTOS.h"
-#include "freertos/task.h"  // <-- ADD THIS
+#include "freertos/task.h"
 #include "driver/gpio.h"
 
 
@@ -23,7 +23,7 @@ typedef struct {
     uint8_t last_a;
     uint8_t last_filtered_a;
     uint8_t filtered_a;
-    TaskHandle_t task_handle;  // <-- NOW IT'S DEFINED
+    TaskHandle_t task_handle;
 } rotary_encoder_t;
 
 void setup_encoders(void);

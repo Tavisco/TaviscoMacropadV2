@@ -469,7 +469,7 @@ void mouse_wiggler_task()
 		if (current_mode != MODE_MOUSE_WIGGLER)
 		{
 			vTaskDelay(pdMS_TO_TICKS(15));
-			return;
+			continue;
 		}
 
 		// bool const keys_pressed = keyboard.update(current_mode);
@@ -488,7 +488,7 @@ void mouse_wiggler_task()
 		if (!tud_hid_ready())
 		{
 			vTaskDelay(pdMS_TO_TICKS(15));
-			return;
+			continue;
 		}
 
 		static int16_t current_x = 0;
@@ -558,7 +558,7 @@ void setup_encoders()
 	encoder1.current_value = 1;
 
 	// Install ISR service if not already done
-	gpio_set_intr_type(GPIO_ENCODER_1_A, GPIO_INTR_POSEDGE);
+	ESP_ERROR_CHECK(gpio_set_intr_type(GPIO_ENCODER_1_A, GPIO_INTR_ANYEDGE));
 	ESP_ERROR_CHECK(gpio_install_isr_service(ESP_INTR_FLAG_EDGE));
 	ESP_ERROR_CHECK(gpio_isr_handler_add(GPIO_ENCODER_1_A, rotary_isr_handler, (void *)&encoder1));
 }
@@ -570,6 +570,7 @@ void rotaryTask(void *arg) {
 	while (true) {
 		// Wait for an interrupt notification
 		ulTaskNotifyTake(pdTRUE, portMAX_DELAY);  // Block until notified
+		esp_rom_delay_us(115);
 		rotary_task(encoder); // Process encoder movement
 		if (encoder->triggered && encoder->dir != 0) {
 			change_current_mode(encoder->dir);
@@ -647,7 +648,6 @@ void app_main(void)
 	
 	// xTaskCreatePinnedToCore(mainTask, "MainTask", 4096, NULL, 1, NULL, 1);
 	xTaskCreatePinnedToCore(rotaryTask, "RotaryTask", 4096, (void *)&encoder1, 1, NULL, 1);
-	// xTaskCreatePinnedToCore(mouse_wiggler_task, "MouseWigglerTask", 4096, NULL, 1, NULL, 1);
-	// xTaskCreatePinnedToCore(screensave_task, "ScreensaveTask", 4096, NULL, 1, NULL, 1);
-
+	xTaskCreatePinnedToCore(mouse_wiggler_task, "MouseWigglerTask", 4096, NULL, 1, NULL, 1);
+	xTaskCreatePinnedToCore(screensave_task, "ScreensaveTask", 4096, NULL, 1, NULL, 1);
 }
