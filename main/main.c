@@ -292,20 +292,20 @@ void draw_current_mode(void)
 
 	if (current_mode == MODE_IDE) {
 		const char *keys[10][4] = {
-			{"Side",	"Comm",	"Impl",		"A"},
+			{"Side",	"Comm",	"Impl",		"Refs"},
 			{"bar",		"ent",	NULL,		NULL},
 
-			{"Termi",	"Run",	"Move",		"B"},
-			{"nal",		NULL,	"Up",		NULL},
+			{"Del",		"Run",	"Move",		"Splt"},
+			{"Line",	NULL,	"Up",		NULL},
 
-			{"Del",		"Com",	"Move",		"C"},
-			{"Line",	"pile",	"Down",		NULL},
+			{NULL,		"Com",	"Move",		"Splt"},
+			{NULL,		"pile",	"Down",		"MoveR"},
 
-			{"D",		"E",	"F",		"G"},
-			{NULL,		NULL,	NULL,		NULL},
+			{NULL,		NULL,	"Re",		"Org"},
+			{NULL,		NULL,	"name",		"Imprt"},
 
-			{"H",		"I",	"J",		"K"},
-			{NULL,		NULL,	NULL,		NULL},
+			{NULL,		NULL,	"Term",	"Fmt"},
+			{NULL,		NULL,	"inal",		"Code"},
 		};
 		draw_keypad(keys);
 	}
