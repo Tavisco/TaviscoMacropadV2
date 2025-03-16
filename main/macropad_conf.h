@@ -1,3 +1,5 @@
+#ifndef __MACROPAD_CONF_H
+#define __MACROPAD_CONF_H
 // Encoders 
 #define GPIO_ENCODER_1_A		GPIO_NUM_15
 #define GPIO_ENCODER_1_B		GPIO_NUM_16
@@ -44,6 +46,19 @@
 
 #define KBSCAN_MUTEX_TIMEOUT_MS 100
 #define INPUT_TASK_FREQ_MS 13
+#define SWITCH_EVENT_QUEUE_SIZE 10
+
+#define SW_EVENT_RELEASE 0
+#define SW_EVENT_SHORT_PRESS 1
+#define SW_EVENT_LONG_PRESS 2
 
 #define ENCODER_1_BTN		20
 #define ENCODER_2_BTN		21
+
+typedef struct
+{
+    uint8_t id;
+    uint8_t type;
+} switch_event_t;
+
+#endif

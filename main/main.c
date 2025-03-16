@@ -21,6 +21,7 @@
 #include "neopixel.h"
 #include <math.h>
 #include <semphr.h>
+#include "freertos/queue.h"
 
 #define NEOPIXEL_PIN GPIO_NUM_48
 #define MAIN_TAG "Main"
@@ -48,6 +49,7 @@ bool is_in_low_brightness_mode = false;
 
 // Keyboard
 SemaphoreHandle_t kbscan_mutex;
+QueueHandle_t switch_event_queue;
 
 /************* TinyUSB descriptors ****************/
 
@@ -195,7 +197,7 @@ static void app_send_hid_demo(void)
 
 uint8_t this_sw_state[SW_COUNT];
 uint8_t last_sw_state[SW_COUNT];
-uint32_t last_press_ts[SW_COUNT];
+uint64_t last_press_ts[SW_COUNT];
 
 uint8_t rowcol_to_index(uint8_t row, uint8_t col)
 {
@@ -695,31 +697,77 @@ void rotaryTask(void *arg)
 	}
 }
 
-void mainTask()
+void scan_matrix_task()
 {
-	while (1)
+	// set up initial state so it won't fire if a key is held on power-on
+	sw_scan();
+	memcpy(last_sw_state, this_sw_state, SW_COUNT);
+	while(1)
 	{
-		// Keys Task
-		// screensave_task();
-		// mouse_wiggler_task();
+		vTaskDelay(pdMS_TO_TICKS(INPUT_TASK_FREQ_MS));
 
-		if (tud_mounted())
+		sw_scan();
+
+		for (uint8_t i = 0; i < SW_COUNT; i++)
 		{
-			static bool send_hid_data = false;
-			if (send_hid_data)
+			if(this_sw_state[i] == 1 && last_sw_state[i] == 0)
 			{
-				app_send_hid_demo();
-				draw_ui();
+				switch_event_t sw_event = 
+				{
+					.id = i,
+					.type = SW_EVENT_SHORT_PRESS,
+				};
+				last_press_ts[i] = esp_timer_get_time();
+				xQueueSend(switch_event_queue, &sw_event, 0);
+				ESP_LOGI("SCAN", "Sent event to queue");
 			}
-			send_hid_data = !gpio_get_level(APP_BUTTON);
 		}
-		vTaskDelay(pdMS_TO_TICKS(15));
 	}
+}
+
+void handle_sw_event(switch_event_t* this_sw_event)
+{
+	ESP_LOGI(MAIN_TAG, "Sending Keyboard report");
+	uint8_t keycode[6] = {HID_KEY_A};
+	tud_hid_keyboard_report(HID_ITF_PROTOCOL_KEYBOARD, 0, keycode);
+	vTaskDelay(pdMS_TO_TICKS(50));
+	tud_hid_keyboard_report(HID_ITF_PROTOCOL_KEYBOARD, 0, NULL);
+}
+
+void macropad_task()
+{
+	while(1)
+	{
+		vTaskDelay(pdMS_TO_TICKS(10));
+		switch_event_t sw_event = { 0 };
+
+		if (xQueueReceive(switch_event_queue, &sw_event, 0) == pdTRUE)
+		{
+			ESP_LOGI("MACROPAD", "Received event from queue");
+			handle_sw_event(&sw_event);
+		}
+	}  
 }
 
 void setup_gpio()
 {
-	const gpio_num_t GPIOS[] = {SWM_COL0_GPIO, SWM_COL1_GPIO, SWM_COL2_GPIO, SWM_COL3_GPIO, SWM_ROW0_GPIO, SWM_ROW1_GPIO, SWM_ROW2_GPIO, SWM_ROW3_GPIO, SWM_ROW4_GPIO, GPIO_ENCODER_1_BTN, GPIO_ENCODER_2_BTN, GPIO_ENCODER_1_A, GPIO_ENCODER_1_B, GPIO_ENCODER_2_A, GPIO_ENCODER_2_B};
+	const gpio_num_t GPIOS[] = {
+		SWM_COL0_GPIO,
+		SWM_COL1_GPIO,
+		SWM_COL2_GPIO,
+		SWM_COL3_GPIO,
+		SWM_ROW0_GPIO,
+		SWM_ROW1_GPIO,
+		SWM_ROW2_GPIO,
+		SWM_ROW3_GPIO,
+		SWM_ROW4_GPIO,
+		GPIO_ENCODER_1_BTN,
+		GPIO_ENCODER_2_BTN,
+		GPIO_ENCODER_1_A,
+		GPIO_ENCODER_1_B,
+		GPIO_ENCODER_2_A,
+		GPIO_ENCODER_2_B
+	};
 
 	for (uint8_t i = 0; i < ARRAY_SIZE(GPIOS); i++)
 	{
@@ -761,6 +809,10 @@ void app_main(void)
 	ESP_LOGI(SETUP_TAG, "Initializing Rotary Encoder");
 	setup_encoders();
 
+	ESP_LOGI(SETUP_TAG, "Initializing Keyboard Matrix");
+	switch_event_queue = xQueueCreate(SWITCH_EVENT_QUEUE_SIZE, sizeof(switch_event_t));
+	kbscan_mutex = xSemaphoreCreateMutex();
+
 	ESP_LOGI(SETUP_TAG, "Initializing USB");
 	const tinyusb_config_t tusb_cfg = {
 		.device_descriptor = NULL,
@@ -776,10 +828,12 @@ void app_main(void)
 	neopixel_SetPixel(neopixel, &startup_pixels[1], 1);
 	draw_ui();
 	last_interaction_us = esp_timer_get_time();
-	ESP_LOGI(SETUP_TAG, "All done! Entering main loop");
 
-	// xTaskCreatePinnedToCore(mainTask, "MainTask", 4096, NULL, 1, NULL, 1);
+	ESP_LOGI(SETUP_TAG, "Initialization done! Starting tasks...");
 	xTaskCreatePinnedToCore(rotaryTask, "RotaryTask", 4096, (void *)&encoder1, 1, NULL, 1);
-	xTaskCreatePinnedToCore(mouse_wiggler_task, "MouseWigglerTask", 4096, NULL, 1, NULL, 1);
+	xTaskCreate(mouse_wiggler_task, "MouseWigglerTask", 4096, NULL, 1, NULL);
 	xTaskCreatePinnedToCore(screensave_task, "ScreensaveTask", 4096, NULL, 1, NULL, 1);
+	xTaskCreate(scan_matrix_task, "ScanMatrixTask", 4096, NULL, 1, NULL);
+	xTaskCreate(macropad_task, "Macropadtask", 4096, NULL, 1, NULL);
+	ESP_LOGI(SETUP_TAG, "All tasks started! The Macropad is ready.");
 }
