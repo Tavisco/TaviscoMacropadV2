@@ -719,7 +719,6 @@ void scan_matrix_task()
 				};
 				last_press_ts[i] = esp_timer_get_time();
 				xQueueSend(switch_event_queue, &sw_event, 0);
-				ESP_LOGI("SCAN", "Sent event to queue");
 			}
 		}
 	}
@@ -727,7 +726,6 @@ void scan_matrix_task()
 
 void handle_sw_event(switch_event_t* this_sw_event)
 {
-	ESP_LOGI(MAIN_TAG, "Sending Keyboard report");
 	uint8_t keycode[6] = {HID_KEY_A};
 	tud_hid_keyboard_report(HID_ITF_PROTOCOL_KEYBOARD, 0, keycode);
 	vTaskDelay(pdMS_TO_TICKS(50));
@@ -743,7 +741,6 @@ void macropad_task()
 
 		if (xQueueReceive(switch_event_queue, &sw_event, 0) == pdTRUE)
 		{
-			ESP_LOGI("MACROPAD", "Received event from queue");
 			handle_sw_event(&sw_event);
 		}
 	}  
@@ -751,36 +748,44 @@ void macropad_task()
 
 void setup_gpio()
 {
-	const gpio_num_t GPIOS[] = {
-		SWM_COL0_GPIO,
-		SWM_COL1_GPIO,
-		SWM_COL2_GPIO,
-		SWM_COL3_GPIO,
-		SWM_ROW0_GPIO,
-		SWM_ROW1_GPIO,
-		SWM_ROW2_GPIO,
-		SWM_ROW3_GPIO,
-		SWM_ROW4_GPIO,
-		GPIO_ENCODER_1_BTN,
-		GPIO_ENCODER_2_BTN,
-		GPIO_ENCODER_1_A,
-		GPIO_ENCODER_1_B,
-		GPIO_ENCODER_2_A,
-		GPIO_ENCODER_2_B
-	};
+	const gpio_config_t sw_matrix_col_config = {
+        .pin_bit_mask = BIT64(SWM_COL0_GPIO) | \
+                BIT64(SWM_COL1_GPIO) | \
+                BIT64(SWM_COL2_GPIO) | \
+                BIT64(SWM_COL3_GPIO),
+        .mode = GPIO_MODE_OUTPUT,
+        .intr_type = GPIO_INTR_DISABLE,
+        .pull_up_en = false,
+        .pull_down_en = false,
+    };
+    ESP_ERROR_CHECK(gpio_config(&sw_matrix_col_config));
+    sw_matrix_col_reset();
+    const gpio_config_t sw_matrix_row_config = {
+        .pin_bit_mask = BIT64(SWM_ROW0_GPIO) | \
+                BIT64(SWM_ROW1_GPIO) | \
+                BIT64(SWM_ROW2_GPIO) | \
+                BIT64(SWM_ROW3_GPIO) | \
+                BIT64(SWM_ROW4_GPIO),
+        .mode = GPIO_MODE_INPUT,
+        .intr_type = GPIO_INTR_DISABLE,
+        .pull_up_en = false,
+        .pull_down_en = true,
+    };
+    ESP_ERROR_CHECK(gpio_config(&sw_matrix_row_config));
 
-	for (uint8_t i = 0; i < ARRAY_SIZE(GPIOS); i++)
-	{
-		const gpio_config_t boot_button_config = {
-			.pin_bit_mask = BIT64(GPIOS[i]),
-			.mode = GPIO_MODE_INPUT,
-			.intr_type = GPIO_INTR_DISABLE,
-			.pull_up_en = true,
-			.pull_down_en = false,
-		};
-		ESP_ERROR_CHECK(gpio_config(&boot_button_config));
-		vTaskDelay(pdMS_TO_TICKS(5));
-	}
+	const gpio_config_t button_config = {
+        .pin_bit_mask = BIT64(GPIO_ENCODER_1_BTN) | \
+                BIT64(GPIO_ENCODER_2_BTN) | \
+                BIT64(GPIO_ENCODER_1_A) | \
+                BIT64(GPIO_ENCODER_1_B) | \
+				BIT64(GPIO_ENCODER_2_A) | \
+                BIT64(GPIO_ENCODER_2_B),
+        .mode = GPIO_MODE_INPUT,
+        .intr_type = GPIO_INTR_DISABLE,
+        .pull_up_en = true,
+        .pull_down_en = false,
+    };
+    ESP_ERROR_CHECK(gpio_config(&button_config));
 }
 
 void app_main(void)
