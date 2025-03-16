@@ -7,7 +7,7 @@
 #include "esp_flash.h"
 #include "esp_system.h"
 #include "driver/i2c_master.h"
-//#include "font8x8_basic.h"
+// #include "font8x8_basic.h"
 #include "ssd1306.h"
 #include "ssd1306_fonts.h"
 #include "tinyusb.h"
@@ -22,17 +22,16 @@
 #include <math.h>
 #include <semphr.h>
 
-
 #define NEOPIXEL_PIN GPIO_NUM_48
 #define MAIN_TAG "Main"
 #define SETUP_TAG "Setup"
 #define SCREENSAVER_TAG "Screen Saver"
 #define UI_TAG "UI"
 #define APP_BUTTON (GPIO_NUM_0) // Use BOOT signal by default
-#define ARRAY_SIZE(x) (sizeof(x)/sizeof(x[0]))
+#define ARRAY_SIZE(x) (sizeof(x) / sizeof(x[0]))
 
 // Mode related variables
-const char *modes[]= {"IDE", "Git", "Docker", "Numpad", "IoT", "Osu!", "Arrowpad", "WASD", "Multimedia", "Wiggler"};
+const char *modes[] = {"IDE", "Git", "Docker", "Numpad", "IoT", "Osu!", "Arrowpad", "WASD", "Multimedia", "Wiggler"};
 int8_t current_mode = MODE_IDE;
 bool mouse_wiggler_enabled = true;
 
@@ -52,7 +51,7 @@ SemaphoreHandle_t kbscan_mutex;
 
 /************* TinyUSB descriptors ****************/
 
-#define TUSB_DESC_TOTAL_LEN      (TUD_CONFIG_DESC_LEN + CFG_TUD_HID * TUD_HID_DESC_LEN)
+#define TUSB_DESC_TOTAL_LEN (TUD_CONFIG_DESC_LEN + CFG_TUD_HID * TUD_HID_DESC_LEN)
 
 /**
  * @brief HID report descriptor
@@ -62,19 +61,18 @@ SemaphoreHandle_t kbscan_mutex;
  */
 const uint8_t hid_report_descriptor[] = {
 	TUD_HID_REPORT_DESC_KEYBOARD(HID_REPORT_ID(HID_ITF_PROTOCOL_KEYBOARD)),
-	TUD_HID_REPORT_DESC_MOUSE(HID_REPORT_ID(HID_ITF_PROTOCOL_MOUSE))
-};
+	TUD_HID_REPORT_DESC_MOUSE(HID_REPORT_ID(HID_ITF_PROTOCOL_MOUSE))};
 
 /**
  * @brief String descriptor
  */
-const char* hid_string_descriptor[5] = {
+const char *hid_string_descriptor[5] = {
 	// array of pointer to string descriptors
 	(char[]){0x09, 0x04},  // 0: is supported language is English (0x0409)
-	"Tavisco",             // 1: Manufacturer
-	"Macropad V2",      // 2: Product
-	"2",              // 3: Serials, should use chip ID
-	"Tavisco Macropad V2",  // 4: HID
+	"Tavisco",			   // 1: Manufacturer
+	"Macropad V2",		   // 2: Product
+	"2",				   // 3: Serials, should use chip ID
+	"Tavisco Macropad V2", // 4: HID
 };
 
 /**
@@ -103,24 +101,25 @@ uint8_t const *tud_hid_descriptor_report_cb(uint8_t instance)
 // Invoked when received GET_REPORT control request
 // Application must fill buffer report's content and return its length.
 // Return zero will cause the stack to STALL request
-uint16_t tud_hid_get_report_cb(uint8_t instance, uint8_t report_id, hid_report_type_t report_type, uint8_t* buffer, uint16_t reqlen)
+uint16_t tud_hid_get_report_cb(uint8_t instance, uint8_t report_id, hid_report_type_t report_type, uint8_t *buffer, uint16_t reqlen)
 {
-	(void) instance;
-	(void) report_id;
-	(void) report_type;
-	(void) buffer;
-	(void) reqlen;
+	(void)instance;
+	(void)report_id;
+	(void)report_type;
+	(void)buffer;
+	(void)reqlen;
 
 	return 0;
 }
 
 // Invoked when received SET_REPORT control request or
 // received data on OUT endpoint ( Report ID = 0, Type = 0 )
-void tud_hid_set_report_cb(uint8_t instance, uint8_t report_id, hid_report_type_t report_type, uint8_t const* buffer, uint16_t bufsize)
+void tud_hid_set_report_cb(uint8_t instance, uint8_t report_id, hid_report_type_t report_type, uint8_t const *buffer, uint16_t bufsize)
 {
 }
 
-typedef enum {
+typedef enum
+{
 	MOUSE_DIR_RIGHT,
 	MOUSE_DIR_DOWN,
 	MOUSE_DIR_LEFT,
@@ -128,8 +127,8 @@ typedef enum {
 	MOUSE_DIR_MAX,
 } mouse_dir_t;
 
-#define DISTANCE_MAX        125
-#define DELTA_SCALAR        5
+#define DISTANCE_MAX 125
+#define DELTA_SCALAR 5
 
 static void mouse_draw_square_next_delta(int8_t *delta_x_ret, int8_t *delta_y_ret)
 {
@@ -137,16 +136,23 @@ static void mouse_draw_square_next_delta(int8_t *delta_x_ret, int8_t *delta_y_re
 	static uint32_t distance = 0;
 
 	// Calculate next delta
-	if (cur_dir == MOUSE_DIR_RIGHT) {
+	if (cur_dir == MOUSE_DIR_RIGHT)
+	{
 		*delta_x_ret = DELTA_SCALAR;
 		*delta_y_ret = 0;
-	} else if (cur_dir == MOUSE_DIR_DOWN) {
+	}
+	else if (cur_dir == MOUSE_DIR_DOWN)
+	{
 		*delta_x_ret = 0;
 		*delta_y_ret = DELTA_SCALAR;
-	} else if (cur_dir == MOUSE_DIR_LEFT) {
+	}
+	else if (cur_dir == MOUSE_DIR_LEFT)
+	{
 		*delta_x_ret = -DELTA_SCALAR;
 		*delta_y_ret = 0;
-	} else if (cur_dir == MOUSE_DIR_UP) {
+	}
+	else if (cur_dir == MOUSE_DIR_UP)
+	{
 		*delta_x_ret = 0;
 		*delta_y_ret = -DELTA_SCALAR;
 	}
@@ -154,10 +160,12 @@ static void mouse_draw_square_next_delta(int8_t *delta_x_ret, int8_t *delta_y_re
 	// Update cumulative distance for current direction
 	distance += DELTA_SCALAR;
 	// Check if we need to change direction
-	if (distance >= DISTANCE_MAX) {
+	if (distance >= DISTANCE_MAX)
+	{
 		distance = 0;
 		cur_dir++;
-		if (cur_dir == MOUSE_DIR_MAX) {
+		if (cur_dir == MOUSE_DIR_MAX)
+		{
 			cur_dir = 0;
 		}
 	}
@@ -176,7 +184,8 @@ static void app_send_hid_demo(void)
 	ESP_LOGI(MAIN_TAG, "Sending Mouse report");
 	int8_t delta_x;
 	int8_t delta_y;
-	for (int i = 0; i < (DISTANCE_MAX / DELTA_SCALAR) * 4; i++) {
+	for (int i = 0; i < (DISTANCE_MAX / DELTA_SCALAR) * 4; i++)
+	{
 		// Get the next x and y delta in the draw square pattern
 		mouse_draw_square_next_delta(&delta_x, &delta_y);
 		tud_hid_mouse_report(HID_ITF_PROTOCOL_MOUSE, 0x00, delta_x, delta_y, 0, 0);
@@ -184,16 +193,15 @@ static void app_send_hid_demo(void)
 	}
 }
 
-
 uint8_t this_sw_state[SW_COUNT];
 uint8_t last_sw_state[SW_COUNT];
 uint32_t last_press_ts[SW_COUNT];
 
 uint8_t rowcol_to_index(uint8_t row, uint8_t col)
 {
-	if(row >= SW_MATRIX_NUM_ROWS || col >= SW_MATRIX_NUM_COLS)
+	if (row >= SW_MATRIX_NUM_ROWS || col >= SW_MATRIX_NUM_COLS)
 		return 0;
-	return row*SW_MATRIX_NUM_COLS + col;
+	return row * SW_MATRIX_NUM_COLS + col;
 }
 
 void scan_row(uint8_t *sw_buf, uint8_t this_col)
@@ -215,8 +223,8 @@ void sw_matrix_col_reset(void)
 
 void sw_scan(void)
 {
-	if(xSemaphoreTake(kbscan_mutex, pdMS_TO_TICKS(KBSCAN_MUTEX_TIMEOUT_MS)) == pdFALSE)
-    	return;
+	if (xSemaphoreTake(kbscan_mutex, pdMS_TO_TICKS(KBSCAN_MUTEX_TIMEOUT_MS)) == pdFALSE)
+		return;
 
 	gpio_set_level(SWM_COL0_GPIO, 1);
 	gpio_set_level(SWM_COL1_GPIO, 0);
@@ -259,7 +267,7 @@ void neopixel_BreatheEffect(tNeopixelContext neopixel, uint16_t duration_ms)
 {
 	const uint8_t max_brightness = 255;
 	const uint8_t min_brightness = 0;
-	const float step_count = 50.0f;  // Number of steps for the entire effect
+	const float step_count = 50.0f;					   // Number of steps for the entire effect
 	const float step_delay = duration_ms / step_count; // Time per step
 
 	for (int i = 0; i <= step_count; i++)
@@ -278,39 +286,47 @@ void neopixel_BreatheEffect(tNeopixelContext neopixel, uint16_t duration_ms)
 	neopixel_SetPixel(neopixel, &off_pixel, 1);
 }
 
-void draw_key_lines(void) {
-	ssd1306_Line(0,36,127,36,White); // horizontal lines
-	ssd1306_Line(0,60,127,60,White);
-	ssd1306_Line(0,83,127,83,White);
-	ssd1306_Line(0,106,127,106,White);
-  
-	ssd1306_Line(32,17,32,127,White); // vertical lines
-	ssd1306_Line(64,17,64,127,White);
-	ssd1306_Line(96,17,96,127,White);
+void draw_key_lines(void)
+{
+	ssd1306_Line(0, 36, 127, 36, White); // horizontal lines
+	ssd1306_Line(0, 60, 127, 60, White);
+	ssd1306_Line(0, 83, 127, 83, White);
+	ssd1306_Line(0, 106, 127, 106, White);
+
+	ssd1306_Line(32, 17, 32, 127, White); // vertical lines
+	ssd1306_Line(64, 17, 64, 127, White);
+	ssd1306_Line(96, 17, 96, 127, White);
 }
 
-void draw_keypad(const char *keys[10][4]) {
+void draw_keypad(const char *keys[10][4])
+{
 	draw_key_lines();
 
 	int x_positions[4] = {0, 34, 66, 98};
 	int y_positions[10] = {17, 17, 41, 41, 64, 64, 87, 87, 109, 109};
 
-	for (int row = 0; row < 10; row+=2) {
-		for (int col = 0; col < 4; col++) {
-			if (keys[row][col]) {
+	for (int row = 0; row < 10; row += 2)
+	{
+		for (int col = 0; col < 4; col++)
+		{
+			if (keys[row][col])
+			{
 				// if there is second row
-				if (keys[row+1][col]) {
-					int text_width = strlen(keys[row+1][col]) * 6; // Fixed 6x8 font
+				if (keys[row + 1][col])
+				{
+					int text_width = strlen(keys[row + 1][col]) * 6; // Fixed 6x8 font
 					int x = x_positions[col] + (31 - text_width) / 2;
-					ssd1306_SetCursor(x, y_positions[row]+10);
-					ssd1306_WriteString((char *)keys[row+1][col], Font_6x8, White);
+					ssd1306_SetCursor(x, y_positions[row] + 10);
+					ssd1306_WriteString((char *)keys[row + 1][col], Font_6x8, White);
 					text_width = strlen(keys[row][col]) * 6; // Fixed 6x8 font
 					x = x_positions[col] + (33 - text_width) / 2;
 					ssd1306_SetCursor(x, y_positions[row]);
-				} else {
+				}
+				else
+				{
 					int text_width = strlen(keys[row][col]) * 6; // Fixed 6x8 font
 					int x = x_positions[col] + (33 - text_width) / 2;
-					ssd1306_SetCursor(x, y_positions[row]+5);
+					ssd1306_SetCursor(x, y_positions[row] + 5);
 				}
 				ssd1306_WriteString((char *)keys[row][col], Font_6x8, White);
 			}
@@ -320,28 +336,48 @@ void draw_keypad(const char *keys[10][4]) {
 
 void draw_custom_mouse_wiggler(void)
 {
-	if (mouse_wiggler_enabled) {
+	if (mouse_wiggler_enabled)
+	{
 		ssd1306_SetCursor(48, 17);
 		ssd1306_WriteString("ON", Font_16x26, White);
-	} else {
+	}
+	else
+	{
 		ssd1306_SetCursor(40, 17);
 		ssd1306_WriteString("OFF", Font_16x26, White);
 	}
-	
+
 	ssd1306_SetCursor(10, 56);
 	ssd1306_WriteString("Any key to toggle", Font_6x8, White);
 }
 
-void draw_current_mode(void) 
+void draw_current_mode(void)
 {
 	ssd1306_FillRectangle(0, 0, 72, 14, Black);
 	ssd1306_SetCursor(0, 3);
 	ssd1306_WriteString((char *)modes[current_mode], Font_7x10, White);
 	ssd1306_FillRectangle(0, 16, 128, 128, Black);
 
-	// if (current_mode == MODE_NUMPAD) {
-	// 	draw_custom_numpad();
-	// }
+	if (current_mode == MODE_NUMPAD)
+	{
+		const char *keys[10][4] = {
+			{"+", "-", "/", "*"},
+			{NULL, NULL, NULL, NULL},
+
+			{"=", "7", "8", "9"},
+			{NULL, NULL, NULL, NULL},
+
+			{",", "4", "5", "6"},
+			{NULL, NULL, NULL, NULL},
+
+			{"ENT", "1", "2", "3"},
+			{"ER", NULL, NULL, NULL},
+
+			{"000", "00", "0", "."},
+			{NULL, NULL, NULL, NULL},
+		};
+		draw_keypad(keys);
+	}
 
 	// if (current_mode == MODE_MULTIMEDIA) {
 	// 	draw_custom_multimedia();
@@ -393,22 +429,23 @@ void draw_current_mode(void)
 	//     draw_keypad(keys);
 	// }
 
-	if (current_mode == MODE_IDE) {
+	if (current_mode == MODE_IDE)
+	{
 		const char *keys[10][4] = {
-			{NULL,		NULL,		NULL,		NULL},
-			{NULL,		NULL,		NULL,		NULL},
+			{NULL, NULL, NULL, NULL},
+			{NULL, NULL, NULL, NULL},
 
-			{NULL,		"Del",		"Refs",		"Splt"},
-			{NULL,		"Line"	,	NULL,		NULL},
+			{NULL, "Del", "Refs", "Splt"},
+			{NULL, "Line", NULL, NULL},
 
-			{"Move",	"Side",		"Impl",		"Splt"},
-			{"Up",		"bar",		NULL,		"MoveR"},
+			{"Move", "Side", "Impl", "Splt"},
+			{"Up", "bar", NULL, "MoveR"},
 
-			{"Move",	"Comm",		"Re",		"Run"},
-			{"Down",	"ent",		"name",		NULL},
+			{"Move", "Comm", "Re", "Run"},
+			{"Down", "ent", "name", NULL},
 
-			{"Fmt",		"Org",		"Term",		"Com"},
-			{"Code",	"Imprt",	"inal",		"pile"},
+			{"Fmt", "Org", "Term", "Com"},
+			{"Code", "Imprt", "inal", "pile"},
 		};
 		draw_keypad(keys);
 	}
@@ -441,7 +478,9 @@ void draw_ui(void)
 	{
 		ssd1306_DrawBitmap(109, 3, icon_usb, 16, 9, White);
 		// oled_screen.OLEDBitmap(109, 3, 16, 9, icon_usb, false, sizeof(icon_usb)/sizeof(uint8_t));
-	} else {
+	}
+	else
+	{
 		ssd1306_SetCursor(109, 3);
 		ssd1306_WriteString("N", Font_7x10, White);
 	}
@@ -453,12 +492,14 @@ void update_last_interaction(void)
 {
 	last_interaction_us = esp_timer_get_time();
 
-	if (is_in_low_brightness_mode) {
+	if (is_in_low_brightness_mode)
+	{
 		ssd1306_SetContrast(254);
 		is_in_low_brightness_mode = false;
 	}
 
-	if (is_in_screensaver_mode) {
+	if (is_in_screensaver_mode)
+	{
 		ESP_LOGI(SCREENSAVER_TAG, "Exiting from screensave mode!");
 		ssd1306_SetDisplayOn(1);
 		ssd1306_SetContrast(254);
@@ -482,18 +523,21 @@ void draw_splash(void)
 
 void change_current_mode(int8_t direction)
 {
-	if (direction == 0) {
+	if (direction == 0)
+	{
 		return;
 	}
 
 	update_last_interaction();
 
 	current_mode += direction;
-	if (current_mode == MODE_COUNT) {
+	if (current_mode == MODE_COUNT)
+	{
 		current_mode = 0;
 	}
 
-	if (current_mode < 0) {
+	if (current_mode < 0)
+	{
 		current_mode = MODE_COUNT - 1;
 	}
 
@@ -528,7 +572,7 @@ void screensave_task()
 			if (should_be_in_min_brightness && !is_in_low_brightness_mode && !should_be_in_screensave)
 			{
 				ESP_LOGI(SCREENSAVER_TAG, "Entering low brightness mode");
-				for (uint8_t i = 254; i > 0; i--) 
+				for (uint8_t i = 254; i > 0; i--)
 				{
 					ssd1306_SetContrast(i);
 					vTaskDelay(pdMS_TO_TICKS(10));
@@ -601,18 +645,20 @@ void mouse_wiggler_task()
 	}
 }
 
-static void IRAM_ATTR rotary_isr_handler(void *arg) {
+static void IRAM_ATTR rotary_isr_handler(void *arg)
+{
 	rotary_encoder_t *encoder = (rotary_encoder_t *)arg;
 	BaseType_t xHigherPriorityTaskWoken = pdFALSE;
 
-	encoder->triggered = 1;  // Mark it as triggered
+	encoder->triggered = 1; // Mark it as triggered
 	encoder->wait_until = esp_timer_get_time() + DEBOUNCE_EDGE;
 
 	// Wake up the processing task
 	vTaskNotifyGiveFromISR(encoder->task_handle, &xHigherPriorityTaskWoken);
 
-	if (xHigherPriorityTaskWoken) {
-		portYIELD_FROM_ISR();  // Force a context switch if needed
+	if (xHigherPriorityTaskWoken)
+	{
+		portYIELD_FROM_ISR(); // Force a context switch if needed
 	}
 }
 
@@ -631,30 +677,37 @@ void setup_encoders()
 	ESP_ERROR_CHECK(gpio_isr_handler_add(GPIO_ENCODER_2_A, rotary_isr_handler, (void *)&encoder1));
 }
 
-void rotaryTask(void *arg) {
+void rotaryTask(void *arg)
+{
 	rotary_encoder_t *encoder = (rotary_encoder_t *)arg;
 	encoder->task_handle = xTaskGetCurrentTaskHandle(); // Store task handle for notifications
 
-	while (true) {
+	while (true)
+	{
 		// Wait for an interrupt notification
-		ulTaskNotifyTake(pdTRUE, portMAX_DELAY);  // Block until notified
+		ulTaskNotifyTake(pdTRUE, portMAX_DELAY); // Block until notified
 		esp_rom_delay_us(115);
 		rotary_task(encoder); // Process encoder movement
-		if (encoder->triggered && encoder->dir != 0) {
+		if (encoder->triggered && encoder->dir != 0)
+		{
 			change_current_mode(encoder->dir);
 		}
 	}
 }
 
-void mainTask() {
-	while (1) {
+void mainTask()
+{
+	while (1)
+	{
 		// Keys Task
 		// screensave_task();
 		// mouse_wiggler_task();
 
-		if (tud_mounted()) {
+		if (tud_mounted())
+		{
 			static bool send_hid_data = false;
-			if (send_hid_data) {
+			if (send_hid_data)
+			{
 				app_send_hid_demo();
 				draw_ui();
 			}
@@ -666,7 +719,7 @@ void mainTask() {
 
 void setup_gpio()
 {
-	const gpio_num_t GPIOS[]= {SWM_COL0_GPIO, SWM_COL1_GPIO, SWM_COL2_GPIO, SWM_COL3_GPIO, SWM_ROW0_GPIO, SWM_ROW1_GPIO, SWM_ROW2_GPIO, SWM_ROW3_GPIO, SWM_ROW4_GPIO, GPIO_ENCODER_1_BTN, GPIO_ENCODER_2_BTN, GPIO_ENCODER_1_A, GPIO_ENCODER_1_B, GPIO_ENCODER_2_A, GPIO_ENCODER_2_B};
+	const gpio_num_t GPIOS[] = {SWM_COL0_GPIO, SWM_COL1_GPIO, SWM_COL2_GPIO, SWM_COL3_GPIO, SWM_ROW0_GPIO, SWM_ROW1_GPIO, SWM_ROW2_GPIO, SWM_ROW3_GPIO, SWM_ROW4_GPIO, GPIO_ENCODER_1_BTN, GPIO_ENCODER_2_BTN, GPIO_ENCODER_1_A, GPIO_ENCODER_1_B, GPIO_ENCODER_2_A, GPIO_ENCODER_2_B};
 
 	for (uint8_t i = 0; i < ARRAY_SIZE(GPIOS); i++)
 	{
@@ -687,15 +740,15 @@ void app_main(void)
 	ESP_LOGI(SETUP_TAG, "\r\n\r\n=-=-=- Welcome to TaviscoMacropad V2! -=-=-=\r\n");
 	neopixel = neopixel_Init(1, NEOPIXEL_PIN);
 	tNeopixel startup_pixels[] =
+		{
+			{0, NP_RGB(0, 255, 0)}, /* green */
+			{0, NP_RGB(0, 0, 0)},	/* green */
+		};
+
+	if (NULL == neopixel)
 	{
-		{ 0, NP_RGB(0,  255, 0) }, /* green */
-		{ 0, NP_RGB(0,  0, 0) }, /* green */
-	};
- 
-	if(NULL == neopixel)
-	{
-	   ESP_LOGE(SETUP_TAG, "[%s] Initialization failed\n", __func__);
-	} 
+		ESP_LOGE(SETUP_TAG, "[%s] Initialization failed\n", __func__);
+	}
 	neopixel_SetPixel(neopixel, &startup_pixels[0], 1);
 
 	ESP_LOGI(SETUP_TAG, "Initializing OLED");
@@ -724,7 +777,7 @@ void app_main(void)
 	draw_ui();
 	last_interaction_us = esp_timer_get_time();
 	ESP_LOGI(SETUP_TAG, "All done! Entering main loop");
-	
+
 	// xTaskCreatePinnedToCore(mainTask, "MainTask", 4096, NULL, 1, NULL, 1);
 	xTaskCreatePinnedToCore(rotaryTask, "RotaryTask", 4096, (void *)&encoder1, 1, NULL, 1);
 	xTaskCreatePinnedToCore(mouse_wiggler_task, "MouseWigglerTask", 4096, NULL, 1, NULL, 1);
