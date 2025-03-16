@@ -21,6 +21,7 @@
         "math.h": "c",
         "stdio.h": "c",
         "task.h": "c",
-        "gpio.h": "c"
+        "gpio.h": "c",
+        "__locale": "c"
     }
 }

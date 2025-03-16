@@ -173,28 +173,6 @@ static void mouse_draw_square_next_delta(int8_t *delta_x_ret, int8_t *delta_y_re
 	}
 }
 
-static void app_send_hid_demo(void)
-{
-	// Keyboard output: Send key 'a/A' pressed and released
-	ESP_LOGI(MAIN_TAG, "Sending Keyboard report");
-	uint8_t keycode[6] = {HID_KEY_A};
-	tud_hid_keyboard_report(HID_ITF_PROTOCOL_KEYBOARD, 0, keycode);
-	vTaskDelay(pdMS_TO_TICKS(50));
-	tud_hid_keyboard_report(HID_ITF_PROTOCOL_KEYBOARD, 0, NULL);
-
-	// Mouse output: Move mouse cursor in square trajectory
-	ESP_LOGI(MAIN_TAG, "Sending Mouse report");
-	int8_t delta_x;
-	int8_t delta_y;
-	for (int i = 0; i < (DISTANCE_MAX / DELTA_SCALAR) * 4; i++)
-	{
-		// Get the next x and y delta in the draw square pattern
-		mouse_draw_square_next_delta(&delta_x, &delta_y);
-		tud_hid_mouse_report(HID_ITF_PROTOCOL_MOUSE, 0x00, delta_x, delta_y, 0, 0);
-		vTaskDelay(pdMS_TO_TICKS(20));
-	}
-}
-
 uint8_t this_sw_state[SW_COUNT];
 uint8_t last_sw_state[SW_COUNT];
 
@@ -717,18 +695,199 @@ void scan_matrix_task()
 					.type = SW_EVENT_SHORT_PRESS,
 				};
 				xQueueSend(switch_event_queue, &sw_event, 0);
+				ESP_LOGI("Matrix", "Pressed key [%u]", sw_event.id);
 			}
 		}
 		memcpy(last_sw_state, this_sw_state, SW_COUNT);
 	}
 }
 
-void handle_sw_event(switch_event_t* this_sw_event)
+uint8_t ascii_to_keycode(char c) {
+    // This is a basic example; you'll need a full table for all characters
+    if (c >= 'a' && c <= 'z') {
+        return HID_KEY_A + (c - 'a');  // 'a' starts from HID_KEY_A
+    }
+    if (c >= 'A' && c <= 'Z') {
+        return HID_KEY_A + (c - 'A');  // Capital letters are the same keycodes
+    }
+    // Handle numbers 1-9
+    if (c >= '1' && c <= '9') {
+        return HID_KEY_1 + (c - '1');  // '1' starts from HID_KEY_1 (0x1E)
+    }
+    // Handle '0' separately, as its HID is 0x27
+    if (c == '0') {
+        return HID_KEY_0;
+    }
+	if (c == ' ') {
+        return HID_KEY_SPACE;          // Space key
+    }
+	if (c == '.') {
+		return HID_KEY_PERIOD;
+	}
+	if (c == ',') {
+		return HID_KEY_COMMA;
+	}
+	if (c == '+') {
+		return HID_KEY_KEYPAD_ADD;
+	}
+	if (c == '-') {
+		return HID_KEY_MINUS;
+	}
+	if (c == '*') {
+		return HID_KEY_KEYPAD_MULTIPLY;
+	}
+	if (c == '=') {
+		return HID_KEY_KEYPAD_EQUAL;
+	}
+	if (c == '\"') {
+		return HID_KEY_APOSTROPHE;
+	}
+	if (c == '<') {
+		return HID_KEY_ARROW_LEFT;
+	}
+	if (c == '`') {
+		return HID_KEY_GRAVE;
+	}
+	if (c == '/') {
+		return HID_KEY_SLASH;
+	}
+    // Add more characters as needed
+    return HID_KEY_NONE;
+}
+
+// uint8_t ascii_to_keycode(char c) {
+//     // Handle lowercase and uppercase letters (both map to the same keycode)
+//     if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')) {
+//         return HID_KEY_A + (c & 0x1F) - 1;  // Uses bitwise AND to normalize case
+//     }
+
+//     // Handle numbers 0-9
+//     if (c >= '0' && c <= '9') {
+//         return HID_KEY_0 + (c - '0');
+//     }
+
+//     // Lookup table for common special characters
+//     static const struct {
+//         char ascii;
+//         uint8_t keycode;
+//     } key_map[] = {
+//         {' ', HID_KEY_SPACE},
+//         {'.', HID_KEY_PERIOD},
+//         {'-', HID_KEY_MINUS},
+//         {'\"', HID_KEY_APOSTROPHE},
+//         {'<', HID_KEY_ARROW_LEFT},  // Not standard, should confirm
+//         {'`', HID_KEY_GRAVE},
+//         {'/', HID_KEY_SLASH},
+//         {',', HID_KEY_COMMA},
+//         {';', HID_KEY_SEMICOLON},
+//         {'=', HID_KEY_EQUAL},
+//         {'\\', HID_KEY_BACKSLASH},
+//         {'[', HID_KEY_BRACKET_LEFT},
+//         {']', HID_KEY_BRACKET_RIGHT},
+//         {'\'', HID_KEY_APOSTROPHE},
+//         {'!', HID_KEY_1},  // Shift modifier needed for symbols
+//         {'@', HID_KEY_2},
+//         {'#', HID_KEY_3},
+//         {'$', HID_KEY_4},
+//         {'%', HID_KEY_5},
+//         {'^', HID_KEY_6},
+//         {'&', HID_KEY_7},
+//         {'*', HID_KEY_8},
+//         {'(', HID_KEY_9},
+//         {')', HID_KEY_0},
+//         {'_', HID_KEY_MINUS},  // Shift required
+//         {'+', HID_KEY_EQUAL},  // Shift required
+//     };
+
+//     // Iterate through the lookup table
+//     for (size_t i = 0; i < sizeof(key_map) / sizeof(key_map[0]); i++) {
+//         if (key_map[i].ascii == c) {
+//             return key_map[i].keycode;
+//         }
+//     }
+
+//     // Default case: Character not found
+//     return HID_KEY_NONE;
+// }
+
+void send_hid_report(uint8_t hid)
 {
-	uint8_t keycode[6] = {HID_KEY_A};
+	uint8_t keycode[6] = {hid};
 	tud_hid_keyboard_report(HID_ITF_PROTOCOL_KEYBOARD, 0, keycode);
 	vTaskDelay(pdMS_TO_TICKS(13));
 	tud_hid_keyboard_report(HID_ITF_PROTOCOL_KEYBOARD, 0, NULL);
+	vTaskDelay(pdMS_TO_TICKS(13));
+}
+
+void send_string_report(char *str)
+{
+	for (const char* p = str; *p != '\0'; p++) {
+        // Get the keycode for the current character
+        uint8_t keycode = ascii_to_keycode(*p);
+
+		uint8_t keys_pressed[6] = {0}; 
+	
+		keys_pressed[0] = keycode;
+
+        if (keycode) {
+            // Send key press report (0 is the modifier byte)
+            tud_hid_keyboard_report(HID_ITF_PROTOCOL_KEYBOARD, 0, keys_pressed);
+
+			vTaskDelay(pdMS_TO_TICKS(13));
+
+			uint8_t empty_keys[6] = {0, 0, 0, 0, 0, 0};
+            tud_hid_keyboard_report(HID_ITF_PROTOCOL_KEYBOARD, 0, empty_keys);
+
+			// Slightly longer delay to ensure the key release is registered
+			vTaskDelay(pdMS_TO_TICKS(13));
+        }
+
+        str++;
+    }
+}
+
+void send_keystroke(keymap_t keymap)
+{
+	if (keymap.hid != 0)
+	{
+		send_hid_report(keymap.hid);
+	} else if (keymap.string != NULL)
+	{
+		send_string_report(keymap.string);
+	}
+
+}
+
+void handle_sw_event(switch_event_t* this_sw_event)
+{
+	uint8_t row = this_sw_event->id / 4;  // Integer division gives the row
+	uint8_t col = this_sw_event->id % 4;  // Modulo gives the column
+
+	// Safety check to prevent out-of-bounds access
+	if (row >= 5 && col >= 4)
+	{
+		ESP_LOGE("MATRIX",  "Tried to handle invalid key!");
+		return;
+	}
+
+	ESP_LOGI("MATRIX", "Sending row [%u] col [%u]", row, col);
+
+	switch (current_mode)
+	{
+	case MODE_NUMPAD:
+		const keymap_t keys[5][4] = {
+			{{"+", 0}, {"-", 0}, {"/", 0}, {"*", 0}},
+			{{"=", 0}, {"7", 0}, {"8", 0}, {"9", 0}},
+			{{",", 0}, {"4", 0}, {"5", 0}, {"6", 0}},
+			{{NULL, HID_KEY_ENTER}, {"1", 0}, {"2", 0}, {"3", 0}},
+			{{"000", 0}, {"00", 0}, {"0", 0}, {".", 0}},
+		};
+		send_keystroke(keys[row][col]);
+		break;
+	
+	default:
+		break;
+	}
 }
 
 void macropad_task()
@@ -740,7 +899,7 @@ void macropad_task()
 
 		if (xQueueReceive(switch_event_queue, &sw_event, 0) == pdTRUE)
 		{
-
+			update_last_interaction();
 			handle_sw_event(&sw_event);
 		}
 	}  

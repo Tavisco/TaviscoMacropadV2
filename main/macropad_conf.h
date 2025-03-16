@@ -33,16 +33,16 @@
 #define GPIO_BUTTONS_COUNT	2
 #define SW_COUNT			(SW_MATRIX_NUM_COLS * SW_MATRIX_NUM_ROWS) + GPIO_BUTTONS_COUNT
 
-#define SWM_COL0_GPIO		GPIO_NUM_10
-#define SWM_COL1_GPIO		GPIO_NUM_11
-#define SWM_COL2_GPIO		GPIO_NUM_12
-#define SWM_COL3_GPIO		GPIO_NUM_13
+#define SWM_COL0_GPIO		GPIO_NUM_13
+#define SWM_COL1_GPIO		GPIO_NUM_12
+#define SWM_COL2_GPIO		GPIO_NUM_11
+#define SWM_COL3_GPIO		GPIO_NUM_10
 
-#define SWM_ROW0_GPIO		GPIO_NUM_18
-#define SWM_ROW1_GPIO		GPIO_NUM_8
+#define SWM_ROW0_GPIO		GPIO_NUM_9
+#define SWM_ROW1_GPIO		GPIO_NUM_46
 #define SWM_ROW2_GPIO		GPIO_NUM_3
-#define SWM_ROW3_GPIO		GPIO_NUM_46
-#define SWM_ROW4_GPIO		GPIO_NUM_9
+#define SWM_ROW3_GPIO		GPIO_NUM_8
+#define SWM_ROW4_GPIO		GPIO_NUM_18
 
 #define KBSCAN_MUTEX_TIMEOUT_MS 100
 #define INPUT_TASK_FREQ_MS 13
@@ -60,5 +60,11 @@ typedef struct
     uint8_t id;
     uint8_t type;
 } switch_event_t;
+
+typedef struct
+{
+    char *string;
+    uint8_t hid;
+} keymap_t;
 
 #endif
