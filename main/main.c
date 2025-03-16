@@ -755,61 +755,6 @@ uint8_t ascii_to_keycode(char c) {
     return HID_KEY_NONE;
 }
 
-// uint8_t ascii_to_keycode(char c) {
-//     // Handle lowercase and uppercase letters (both map to the same keycode)
-//     if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')) {
-//         return HID_KEY_A + (c & 0x1F) - 1;  // Uses bitwise AND to normalize case
-//     }
-
-//     // Handle numbers 0-9
-//     if (c >= '0' && c <= '9') {
-//         return HID_KEY_0 + (c - '0');
-//     }
-
-//     // Lookup table for common special characters
-//     static const struct {
-//         char ascii;
-//         uint8_t keycode;
-//     } key_map[] = {
-//         {' ', HID_KEY_SPACE},
-//         {'.', HID_KEY_PERIOD},
-//         {'-', HID_KEY_MINUS},
-//         {'\"', HID_KEY_APOSTROPHE},
-//         {'<', HID_KEY_ARROW_LEFT},  // Not standard, should confirm
-//         {'`', HID_KEY_GRAVE},
-//         {'/', HID_KEY_SLASH},
-//         {',', HID_KEY_COMMA},
-//         {';', HID_KEY_SEMICOLON},
-//         {'=', HID_KEY_EQUAL},
-//         {'\\', HID_KEY_BACKSLASH},
-//         {'[', HID_KEY_BRACKET_LEFT},
-//         {']', HID_KEY_BRACKET_RIGHT},
-//         {'\'', HID_KEY_APOSTROPHE},
-//         {'!', HID_KEY_1},  // Shift modifier needed for symbols
-//         {'@', HID_KEY_2},
-//         {'#', HID_KEY_3},
-//         {'$', HID_KEY_4},
-//         {'%', HID_KEY_5},
-//         {'^', HID_KEY_6},
-//         {'&', HID_KEY_7},
-//         {'*', HID_KEY_8},
-//         {'(', HID_KEY_9},
-//         {')', HID_KEY_0},
-//         {'_', HID_KEY_MINUS},  // Shift required
-//         {'+', HID_KEY_EQUAL},  // Shift required
-//     };
-
-//     // Iterate through the lookup table
-//     for (size_t i = 0; i < sizeof(key_map) / sizeof(key_map[0]); i++) {
-//         if (key_map[i].ascii == c) {
-//             return key_map[i].keycode;
-//         }
-//     }
-
-//     // Default case: Character not found
-//     return HID_KEY_NONE;
-// }
-
 void send_hid_report(uint8_t hid)
 {
 	uint8_t keycode[6] = {hid};
