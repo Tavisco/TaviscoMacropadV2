@@ -197,7 +197,6 @@ static void app_send_hid_demo(void)
 
 uint8_t this_sw_state[SW_COUNT];
 uint8_t last_sw_state[SW_COUNT];
-uint64_t last_press_ts[SW_COUNT];
 
 uint8_t rowcol_to_index(uint8_t row, uint8_t col)
 {
@@ -717,10 +716,10 @@ void scan_matrix_task()
 					.id = i,
 					.type = SW_EVENT_SHORT_PRESS,
 				};
-				last_press_ts[i] = esp_timer_get_time();
 				xQueueSend(switch_event_queue, &sw_event, 0);
 			}
 		}
+		memcpy(last_sw_state, this_sw_state, SW_COUNT);
 	}
 }
 
@@ -728,7 +727,7 @@ void handle_sw_event(switch_event_t* this_sw_event)
 {
 	uint8_t keycode[6] = {HID_KEY_A};
 	tud_hid_keyboard_report(HID_ITF_PROTOCOL_KEYBOARD, 0, keycode);
-	vTaskDelay(pdMS_TO_TICKS(50));
+	vTaskDelay(pdMS_TO_TICKS(13));
 	tud_hid_keyboard_report(HID_ITF_PROTOCOL_KEYBOARD, 0, NULL);
 }
 
@@ -741,6 +740,7 @@ void macropad_task()
 
 		if (xQueueReceive(switch_event_queue, &sw_event, 0) == pdTRUE)
 		{
+
 			handle_sw_event(&sw_event);
 		}
 	}  
