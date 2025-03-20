@@ -330,6 +330,19 @@ void draw_custom_mouse_wiggler(void)
 	ssd1306_WriteString("Any key to toggle", Font_6x8, White);
 }
 
+void draw_custom_multimedia(void)
+{
+	draw_key_lines();
+
+	ssd1306_DrawBitmap(38, 67, icon_mute, 16, 12, White);
+	ssd1306_DrawBitmap(78, 67, icon_volume, 16, 12, White);
+
+	ssd1306_DrawBitmap(38, 90, icon_prev, 16, 8, White);
+	ssd1306_DrawBitmap(72, 90, icon_play, 16, 8, White);
+	ssd1306_DrawBitmap(82, 90, icon_pause, 16, 8, White);
+	ssd1306_DrawBitmap(118, 90, icon_next, 16, 8, White);
+}
+
 void draw_current_mode(void)
 {
 	ssd1306_FillRectangle(0, 0, 72, 14, Black);
@@ -358,9 +371,9 @@ void draw_current_mode(void)
 		draw_keypad(keys);
 	}
 
-	// if (current_mode == MODE_MULTIMEDIA) {
-	// 	draw_custom_multimedia();
-	// }
+	if (current_mode == MODE_MULTIMEDIA) {
+		draw_custom_multimedia();
+	}
 
 	// if (current_mode == MODE_OSU)
 	// {
@@ -393,14 +406,25 @@ void draw_current_mode(void)
 		draw_keypad(keys);
 	}
 
-	// if (current_mode == MODE_DOCEKR) {
-	//     const char *keys[3][3] = {
-	//         {"Torchic",	"DCU",	"Treecko"},
-	//         {"PS",		"NVIM",	"DCL"},
-	//         {"DCD",		"DCP",	"DCUD"}
-	//     };
-	//     draw_keypad(keys);
-	// }
+	if (current_mode == MODE_DOCKER) {
+		const char *keys[10][4] = {
+			{NULL, NULL, NULL, NULL},
+			{NULL, NULL, NULL, NULL},
+
+			{NULL, "Tor", NULL, "Tree"},
+			{NULL, "chic", NULL, "cko"},
+
+			{NULL, "PS", "NVIM", "DCL"},
+			{NULL, NULL, NULL, NULL},
+
+			{"DCU", "DCD", "DCP", "DCUD"},
+			{NULL, NULL, NULL, NULL},
+
+			{NULL, NULL, NULL, NULL},
+			{NULL, NULL, NULL, NULL},
+		};
+	    draw_keypad(keys);
+	}
 
 	// if (current_mode == MODE_ARROWPAD) {
 	//     const char *keys[3][3] = {
@@ -423,8 +447,8 @@ void draw_current_mode(void)
 	if (current_mode == MODE_IDE)
 	{
 		const char *keys[10][4] = {
-			{NULL, "Del", "Refs", "Splt"},
-			{NULL, "Line", NULL, NULL},
+			{"Dup", "Del", "Refs", "Splt"},
+			{"Line", "Line", NULL, NULL},
 
 			{"Move", "Side", "Impl", "Splt"},
 			{"Up", "bar", NULL, "MoveR"},
@@ -829,9 +853,22 @@ void handle_sw_event(switch_event_t* this_sw_event)
 		break;
 	}
 
-	case MODE_IDE:
+	case MODE_DOCKER: {
+		const keymap_t keys[5][4] = {
+			{{"", 0, 0}, {"", 0, 0}, {"", 0, 0}, {"", 0, 0}},
+			{{"", 0, 0}, {"cd ~/composes/torchic", 0, 0}, {"", 0, 0}, {"cd ~/composes/treecko", 0, 0}},
+			{{"", 0, 0}, {"docker ps", 0, 0}, {"nvim compose.yml", 0, 0}, {"docker compose logs -f", 0, 0}},
+			{{"docker compose up", 0, 0}, {"docker compose down", 0, 0}, {"docker compose pull", 0, 0}, {"docker compose up -d", 0, 0}},
+			{{"", 0, 0}, {"", 0, 0}, {"", 0, 0}, {"", 0, 0}},
+		};
+		send_keystroke(keys[row][col]);
+		break;
+	}
+
+	case MODE_IDE: {
 		send_keystroke(map_to_function(this_sw_event->id));
 		break;
+	}
 	
 	default:
 		break;
