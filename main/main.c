@@ -189,7 +189,7 @@ void scan_row(uint8_t *sw_buf, uint8_t this_col)
 	sw_buf[rowcol_to_index(1, this_col)] = gpio_get_level(SWM_ROW1_GPIO);
 	sw_buf[rowcol_to_index(2, this_col)] = gpio_get_level(SWM_ROW2_GPIO);
 	sw_buf[rowcol_to_index(3, this_col)] = gpio_get_level(SWM_ROW3_GPIO);
-	sw_buf[rowcol_to_index(4, this_col)] = gpio_get_level(SWM_ROW4_GPIO);
+	sw_buf[rowcol_to_index(4, this_col)] = 0; //gpio_get_level(SWM_ROW4_GPIO); GPIO BUG
 }
 
 void sw_matrix_col_reset(void)
@@ -372,14 +372,26 @@ void draw_current_mode(void)
 		draw_custom_mouse_wiggler();
 	}
 
-	// if (current_mode == MODE_GIT) {
-	//     const char *keys[3][3] = {
-	//         {nullptr,	"Stash",	"St pop"},
-	//         {"Diff",	"Pull", 	"Push"},
-	//         {"Status",	"Add .",	"Commit"}
-	//     };
-	//     draw_keypad(keys);
-	// }
+	if (current_mode == MODE_GIT)
+	{
+		const char *keys[10][4] = {
+			{NULL, NULL, NULL, NULL},
+			{NULL, NULL, NULL, NULL},
+
+			{"Chkt", "Push", "Stsh", "Stsh"},
+			{"IIM", "IIM", NULL, "Pop"},
+
+			{"New", "Chkt", "Pull", "Push"},
+			{"IIM", "dev", NULL, NULL},
+
+			{"Diff", "Sta", "Add", "Com"},
+			{NULL, "tus", ".", "mit"},
+
+			{NULL, NULL, NULL, NULL},
+			{NULL, NULL, NULL, NULL},
+		};
+		draw_keypad(keys);
+	}
 
 	// if (current_mode == MODE_DOCEKR) {
 	//     const char *keys[3][3] = {
@@ -411,9 +423,6 @@ void draw_current_mode(void)
 	if (current_mode == MODE_IDE)
 	{
 		const char *keys[10][4] = {
-			{NULL, NULL, NULL, NULL},
-			{NULL, NULL, NULL, NULL},
-
 			{NULL, "Del", "Refs", "Splt"},
 			{NULL, "Line", NULL, NULL},
 
@@ -425,6 +434,9 @@ void draw_current_mode(void)
 
 			{"Fmt", "Org", "Term", "Com"},
 			{"Code", "Imprt", "inal", "pile"},
+
+			{NULL, NULL, NULL, NULL},
+			{NULL, NULL, NULL, NULL},
 		};
 		draw_keypad(keys);
 	}
@@ -695,70 +707,16 @@ void scan_matrix_task()
 					.type = SW_EVENT_SHORT_PRESS,
 				};
 				xQueueSend(switch_event_queue, &sw_event, 0);
-				ESP_LOGI("Matrix", "Pressed key [%u]", sw_event.id);
 			}
 		}
 		memcpy(last_sw_state, this_sw_state, SW_COUNT);
 	}
 }
 
-uint8_t ascii_to_keycode(char c) {
-    // This is a basic example; you'll need a full table for all characters
-    if (c >= 'a' && c <= 'z') {
-        return HID_KEY_A + (c - 'a');  // 'a' starts from HID_KEY_A
-    }
-    if (c >= 'A' && c <= 'Z') {
-        return HID_KEY_A + (c - 'A');  // Capital letters are the same keycodes
-    }
-    // Handle numbers 1-9
-    if (c >= '1' && c <= '9') {
-        return HID_KEY_1 + (c - '1');  // '1' starts from HID_KEY_1 (0x1E)
-    }
-    // Handle '0' separately, as its HID is 0x27
-    if (c == '0') {
-        return HID_KEY_0;
-    }
-	if (c == ' ') {
-        return HID_KEY_SPACE;          // Space key
-    }
-	if (c == '.') {
-		return HID_KEY_PERIOD;
-	}
-	if (c == ',') {
-		return HID_KEY_COMMA;
-	}
-	if (c == '+') {
-		return HID_KEY_KEYPAD_ADD;
-	}
-	if (c == '-') {
-		return HID_KEY_MINUS;
-	}
-	if (c == '*') {
-		return HID_KEY_KEYPAD_MULTIPLY;
-	}
-	if (c == '=') {
-		return HID_KEY_KEYPAD_EQUAL;
-	}
-	if (c == '\"') {
-		return HID_KEY_APOSTROPHE;
-	}
-	if (c == '<') {
-		return HID_KEY_ARROW_LEFT;
-	}
-	if (c == '`') {
-		return HID_KEY_GRAVE;
-	}
-	if (c == '/') {
-		return HID_KEY_SLASH;
-	}
-    // Add more characters as needed
-    return HID_KEY_NONE;
-}
-
-void send_hid_report(uint8_t hid)
+void send_hid_report(uint8_t hid, uint8_t modifier)
 {
 	uint8_t keycode[6] = {hid};
-	tud_hid_keyboard_report(HID_ITF_PROTOCOL_KEYBOARD, 0, keycode);
+	tud_hid_keyboard_report(HID_ITF_PROTOCOL_KEYBOARD, modifier, keycode);
 	vTaskDelay(pdMS_TO_TICKS(13));
 	tud_hid_keyboard_report(HID_ITF_PROTOCOL_KEYBOARD, 0, NULL);
 	vTaskDelay(pdMS_TO_TICKS(13));
@@ -767,40 +725,60 @@ void send_hid_report(uint8_t hid)
 void send_string_report(char *str)
 {
 	for (const char* p = str; *p != '\0'; p++) {
-        // Get the keycode for the current character
-        uint8_t keycode = ascii_to_keycode(*p);
+		uint8_t const conv_table[128][2] =  { HID_ASCII_TO_KEYCODE };
+		
+		uint8_t keycode[6] = { 0 };
+		uint8_t modifier   = 0;
+		
+		uint8_t index = (uint8_t)(*p);
 
-		uint8_t keys_pressed[6] = {0}; 
-	
-		keys_pressed[0] = keycode;
+		if ( conv_table[index][0] ) modifier = KEYBOARD_MODIFIER_LEFTSHIFT;
+		keycode[0] = conv_table[index][1];
 
-        if (keycode) {
-            // Send key press report (0 is the modifier byte)
-            tud_hid_keyboard_report(HID_ITF_PROTOCOL_KEYBOARD, 0, keys_pressed);
+		tud_hid_keyboard_report(HID_ITF_PROTOCOL_KEYBOARD, modifier, keycode);
 
-			vTaskDelay(pdMS_TO_TICKS(13));
+		vTaskDelay(pdMS_TO_TICKS(13));
 
-			uint8_t empty_keys[6] = {0, 0, 0, 0, 0, 0};
-            tud_hid_keyboard_report(HID_ITF_PROTOCOL_KEYBOARD, 0, empty_keys);
+		uint8_t empty_keys[6] = {0, 0, 0, 0, 0, 0};
+		tud_hid_keyboard_report(HID_ITF_PROTOCOL_KEYBOARD, 0, empty_keys);
 
-			// Slightly longer delay to ensure the key release is registered
-			vTaskDelay(pdMS_TO_TICKS(13));
-        }
+		// Slightly longer delay to ensure the key release is registered
+		vTaskDelay(pdMS_TO_TICKS(13));
 
-        str++;
-    }
+		str++;
+	}
 }
 
 void send_keystroke(keymap_t keymap)
 {
 	if (keymap.hid != 0)
 	{
-		send_hid_report(keymap.hid);
+		send_hid_report(keymap.hid, keymap.modifier);
 	} else if (keymap.string != NULL)
 	{
 		send_string_report(keymap.string);
 	}
+}
 
+keymap_t map_to_function(uint8_t key_id)
+{
+	keymap_t keymap;
+		
+	if (key_id < 8) {
+		// Directly map to F13-F20
+		keymap.hid = HID_KEY_F13 + key_id;
+		keymap.modifier = 0;
+	} else if (key_id < 16) {
+		// Map to F13-F18 with Left Shift modifier
+		keymap.hid = HID_KEY_F13 + (key_id - 8);
+		keymap.modifier = KEYBOARD_MODIFIER_LEFTSHIFT;
+	} else {
+		// Map to F13-F18 with Left Control modifier
+		keymap.hid = HID_KEY_F13 + (key_id - 16);
+		keymap.modifier = KEYBOARD_MODIFIER_LEFTCTRL;
+	}
+
+	return keymap;
 }
 
 void handle_sw_event(switch_event_t* this_sw_event)
@@ -817,17 +795,42 @@ void handle_sw_event(switch_event_t* this_sw_event)
 
 	ESP_LOGI("MATRIX", "Sending row [%u] col [%u]", row, col);
 
+	// const keymap_t keys[5][4] = {
+	// 	{{"", 0, 0}, {"", 0, 0}, {"", 0, 0}, {"", 0, 0}},
+	// 	{{"", 0, 0}, {"", 0, 0}, {"", 0, 0}, {"", 0, 0}},
+	// 	{{"", 0, 0}, {"", 0, 0}, {"", 0, 0}, {"", 0, 0}},
+	// 	{{"", 0, 0}, {"", 0, 0}, {"", 0, 0}, {"", 0, 0}},
+	// 	{{"", 0, 0}, {"", 0, 0}, {"", 0, 0}, {"", 0, 0}},
+	// };
+
 	switch (current_mode)
 	{
-	case MODE_NUMPAD:
+	case MODE_NUMPAD: {
 		const keymap_t keys[5][4] = {
-			{{"+", 0}, {"-", 0}, {"/", 0}, {"*", 0}},
-			{{"=", 0}, {"7", 0}, {"8", 0}, {"9", 0}},
-			{{",", 0}, {"4", 0}, {"5", 0}, {"6", 0}},
-			{{NULL, HID_KEY_ENTER}, {"1", 0}, {"2", 0}, {"3", 0}},
-			{{"000", 0}, {"00", 0}, {"0", 0}, {".", 0}},
+			{{"+", 0, 0}, {"-", 0, 0}, {"/", 0, 0}, {"*", 0, 0}},
+			{{"=", 0, 0}, {"7", 0, 0}, {"8", 0, 0}, {"9", 0, 0}},
+			{{",", 0, 0}, {"4", 0, 0}, {"5", 0, 0}, {"6", 0, 0}},
+			{{NULL, HID_KEY_ENTER, 0}, {"1", 0, 0}, {"2", 0, 0}, {"3", 0, 0}},
+			{{"000", 0, 0}, {"00", 0, 0}, {"0", 0, 0}, {".", 0, 0}},
 		};
 		send_keystroke(keys[row][col]);
+		break;
+	}
+
+	case MODE_GIT: {
+		const keymap_t keys[5][4] = {
+			{{"", 0, 0}, {"", 0, 0}, {"", 0, 0}, {"", 0, 0}},
+			{{"git checkout feature/IIM-", 0, 0}, {"git push -u origin feature/IIM-", 0, 0}, {"git stash", 0, 0}, {"git stash pop", 0, 0}},
+			{{"git checkout -b feature/IIM-", 0, 0}, {"git checkout develop", 0, 0}, {"git pull", 0, 0}, {"git push", 0, 0}},
+			{{"git diff", 0, 0}, {"git status", 0, 0}, {"git add .", 0, 0}, {"git commit -m \" \" ", 0, 0}},
+			{{"", 0, 0}, {"", 0, 0}, {"", 0, 0}, {"", 0, 0}},
+		};
+		send_keystroke(keys[row][col]);
+		break;
+	}
+
+	case MODE_IDE:
+		send_keystroke(map_to_function(this_sw_event->id));
 		break;
 	
 	default:

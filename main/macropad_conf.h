@@ -65,6 +65,7 @@ typedef struct
 {
     char *string;
     uint8_t hid;
+    hid_keyboard_modifier_bm_t modifier;
 } keymap_t;
 
 #endif
