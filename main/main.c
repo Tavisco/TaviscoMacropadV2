@@ -424,7 +424,7 @@ void draw_current_mode(void)
 
 void reset_variables(void)
 {
-	mouse_wiggler_enabled = true; // TODO: Should be false
+	mouse_wiggler_enabled = false; // TODO: Should be false
 }
 
 void draw_ui(void)
@@ -555,23 +555,11 @@ void mouse_wiggler_task()
 {
 	while (1)
 	{
-		if (current_mode != MODE_MOUSE_WIGGLER)
+		if (!mouse_wiggler_enabled)
 		{
 			vTaskDelay(pdMS_TO_TICKS(15));
 			continue;
 		}
-
-		// bool const keys_pressed = keyboard.update(current_mode);
-		// if (keys_pressed)
-		// {
-		// 	mouse_wiggler_enabled = !mouse_wiggler_enabled;
-		// 	sleep_ms(150);
-		// 	draw_ui();
-		// 	update_last_interaction();
-		// }
-
-		// if (!mouse_wiggler_enabled)
-		// 	return;
 
 		// skip if hid is not ready yet
 		if (!tud_hid_ready())
@@ -764,7 +752,7 @@ void handle_sw_event(switch_event_t* this_sw_event)
 		return;
 	}
 
-	ESP_LOGI("MATRIX", "Sending row [%u] col [%u]", row, col);
+	ESP_LOGI("MATRIX", "Pressed row [%u] col [%u]", row, col);
 
 	// const keymap_t keys[5][4] = {
 	// 	{{"", 0, 0}, {"", 0, 0}, {"", 0, 0}, {"", 0, 0}},
@@ -814,6 +802,12 @@ void handle_sw_event(switch_event_t* this_sw_event)
 
 	case MODE_IDE: {
 		send_keystroke(map_to_function(this_sw_event->id));
+		break;
+	}
+
+	case MODE_MOUSE_WIGGLER: {
+		mouse_wiggler_enabled = !mouse_wiggler_enabled;
+		draw_ui();
 		break;
 	}
 
