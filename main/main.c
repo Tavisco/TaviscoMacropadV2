@@ -120,59 +120,6 @@ void tud_hid_set_report_cb(uint8_t instance, uint8_t report_id, hid_report_type_
 {
 }
 
-typedef enum
-{
-	MOUSE_DIR_RIGHT,
-	MOUSE_DIR_DOWN,
-	MOUSE_DIR_LEFT,
-	MOUSE_DIR_UP,
-	MOUSE_DIR_MAX,
-} mouse_dir_t;
-
-#define DISTANCE_MAX 125
-#define DELTA_SCALAR 5
-
-static void mouse_draw_square_next_delta(int8_t *delta_x_ret, int8_t *delta_y_ret)
-{
-	static mouse_dir_t cur_dir = MOUSE_DIR_RIGHT;
-	static uint32_t distance = 0;
-
-	// Calculate next delta
-	if (cur_dir == MOUSE_DIR_RIGHT)
-	{
-		*delta_x_ret = DELTA_SCALAR;
-		*delta_y_ret = 0;
-	}
-	else if (cur_dir == MOUSE_DIR_DOWN)
-	{
-		*delta_x_ret = 0;
-		*delta_y_ret = DELTA_SCALAR;
-	}
-	else if (cur_dir == MOUSE_DIR_LEFT)
-	{
-		*delta_x_ret = -DELTA_SCALAR;
-		*delta_y_ret = 0;
-	}
-	else if (cur_dir == MOUSE_DIR_UP)
-	{
-		*delta_x_ret = 0;
-		*delta_y_ret = -DELTA_SCALAR;
-	}
-
-	// Update cumulative distance for current direction
-	distance += DELTA_SCALAR;
-	// Check if we need to change direction
-	if (distance >= DISTANCE_MAX)
-	{
-		distance = 0;
-		cur_dir++;
-		if (cur_dir == MOUSE_DIR_MAX)
-		{
-			cur_dir = 0;
-		}
-	}
-}
-
 uint8_t this_sw_state[SW_COUNT];
 uint8_t last_sw_state[SW_COUNT];
 
@@ -189,7 +136,7 @@ void scan_row(uint8_t *sw_buf, uint8_t this_col)
 	sw_buf[rowcol_to_index(1, this_col)] = gpio_get_level(SWM_ROW1_GPIO);
 	sw_buf[rowcol_to_index(2, this_col)] = gpio_get_level(SWM_ROW2_GPIO);
 	sw_buf[rowcol_to_index(3, this_col)] = gpio_get_level(SWM_ROW3_GPIO);
-	sw_buf[rowcol_to_index(4, this_col)] = 0; //gpio_get_level(SWM_ROW4_GPIO); GPIO BUG
+	sw_buf[rowcol_to_index(4, this_col)] = gpio_get_level(SWM_ROW4_GPIO);
 }
 
 void sw_matrix_col_reset(void)
@@ -317,16 +264,16 @@ void draw_custom_mouse_wiggler(void)
 {
 	if (mouse_wiggler_enabled)
 	{
-		ssd1306_SetCursor(48, 17);
+		ssd1306_SetCursor(48, 56);
 		ssd1306_WriteString("ON", Font_16x26, White);
 	}
 	else
 	{
-		ssd1306_SetCursor(40, 17);
+		ssd1306_SetCursor(40, 56);
 		ssd1306_WriteString("OFF", Font_16x26, White);
 	}
 
-	ssd1306_SetCursor(10, 56);
+	ssd1306_SetCursor(13, 119);
 	ssd1306_WriteString("Any key to toggle", Font_6x8, White);
 }
 
@@ -334,13 +281,11 @@ void draw_custom_multimedia(void)
 {
 	draw_key_lines();
 
-	ssd1306_DrawBitmap(38, 67, icon_mute, 16, 12, White);
-	ssd1306_DrawBitmap(78, 67, icon_volume, 16, 12, White);
-
-	ssd1306_DrawBitmap(38, 90, icon_prev, 16, 8, White);
-	ssd1306_DrawBitmap(72, 90, icon_play, 16, 8, White);
-	ssd1306_DrawBitmap(82, 90, icon_pause, 16, 8, White);
-	ssd1306_DrawBitmap(118, 90, icon_next, 16, 8, White);
+	ssd1306_DrawBitmap(10, 112, icon_volume, 16, 12, White);
+	ssd1306_DrawBitmap(43, 114, icon_prev, 16, 8, White);
+	ssd1306_DrawBitmap(72, 114, icon_play, 16, 8, White);
+	ssd1306_DrawBitmap(82, 114, icon_pause, 16, 8, White);
+	ssd1306_DrawBitmap(108, 114, icon_next, 16, 8, White);
 }
 
 void draw_current_mode(void)
@@ -391,6 +336,9 @@ void draw_current_mode(void)
 			{NULL, NULL, NULL, NULL},
 			{NULL, NULL, NULL, NULL},
 
+			{"Mrg", NULL, NULL, NULL},
+			{"dvlp", NULL, NULL, NULL},
+
 			{"Chkt", "Push", "Stsh", "Stsh"},
 			{"IIM", "IIM", NULL, "Pop"},
 
@@ -399,15 +347,15 @@ void draw_current_mode(void)
 
 			{"Diff", "Sta", "Add", "Com"},
 			{NULL, "tus", ".", "mit"},
-
-			{NULL, NULL, NULL, NULL},
-			{NULL, NULL, NULL, NULL},
 		};
 		draw_keypad(keys);
 	}
 
 	if (current_mode == MODE_DOCKER) {
 		const char *keys[10][4] = {
+			{NULL, NULL, NULL, NULL},
+			{NULL, NULL, NULL, NULL},
+
 			{NULL, NULL, NULL, NULL},
 			{NULL, NULL, NULL, NULL},
 
@@ -418,9 +366,6 @@ void draw_current_mode(void)
 			{NULL, NULL, NULL, NULL},
 
 			{"DCU", "DCD", "DCP", "DCUD"},
-			{NULL, NULL, NULL, NULL},
-
-			{NULL, NULL, NULL, NULL},
 			{NULL, NULL, NULL, NULL},
 		};
 	    draw_keypad(keys);
@@ -447,6 +392,9 @@ void draw_current_mode(void)
 	if (current_mode == MODE_IDE)
 	{
 		const char *keys[10][4] = {
+			{NULL, NULL, NULL, "GoTo"},
+			{NULL, NULL, NULL, "Test"},
+
 			{"Dup", "Del", "Refs", "Splt"},
 			{"Line", "Line", NULL, NULL},
 
@@ -458,9 +406,6 @@ void draw_current_mode(void)
 
 			{"Fmt", "Org", "Term", "Com"},
 			{"Code", "Imprt", "inal", "pile"},
-
-			{NULL, NULL, NULL, NULL},
-			{NULL, NULL, NULL, NULL},
 		};
 		draw_keypad(keys);
 	}
@@ -486,18 +431,16 @@ void draw_ui(void)
 {
 	ESP_LOGI(UI_TAG, "Drawing UI\r\n");
 	ssd1306_Fill(Black);
-	// oled_screen.drawLine(0,15,128,15,WHITE);
 	ssd1306_Line(0, 15, 128, 15, White);
 
 	if (tud_mounted())
 	{
 		ssd1306_DrawBitmap(109, 3, icon_usb, 16, 9, White);
-		// oled_screen.OLEDBitmap(109, 3, 16, 9, icon_usb, false, sizeof(icon_usb)/sizeof(uint8_t));
 	}
 	else
 	{
 		ssd1306_SetCursor(109, 3);
-		ssd1306_WriteString("N", Font_7x10, White);
+		ssd1306_WriteString("?", Font_7x10, White);
 	}
 
 	draw_current_mode();
@@ -642,7 +585,7 @@ void mouse_wiggler_task()
 		static bool x_is_forward = true;
 		static int8_t delta_y = 0;
 
-		if (current_x == 256 && x_is_forward)
+		if (current_x == 255 && x_is_forward)
 		{
 			delta_x = -1;
 			x_is_forward = false;
@@ -807,6 +750,10 @@ keymap_t map_to_function(uint8_t key_id)
 
 void handle_sw_event(switch_event_t* this_sw_event)
 {
+	if (this_sw_event->id >= ENCODER_1_BTN){
+		return;
+	}
+
 	uint8_t row = this_sw_event->id / 4;  // Integer division gives the row
 	uint8_t col = this_sw_event->id % 4;  // Modulo gives the column
 
@@ -844,10 +791,10 @@ void handle_sw_event(switch_event_t* this_sw_event)
 	case MODE_GIT: {
 		const keymap_t keys[5][4] = {
 			{{"", 0, 0}, {"", 0, 0}, {"", 0, 0}, {"", 0, 0}},
+			{{"", 0, 0}, {"", 0, 0}, {"", 0, 0}, {"", 0, 0}},
 			{{"git checkout feature/IIM-", 0, 0}, {"git push -u origin feature/IIM-", 0, 0}, {"git stash", 0, 0}, {"git stash pop", 0, 0}},
 			{{"git checkout -b feature/IIM-", 0, 0}, {"git checkout develop", 0, 0}, {"git pull", 0, 0}, {"git push", 0, 0}},
 			{{"git diff", 0, 0}, {"git status", 0, 0}, {"git add .", 0, 0}, {"git commit -m \" \" ", 0, 0}},
-			{{"", 0, 0}, {"", 0, 0}, {"", 0, 0}, {"", 0, 0}},
 		};
 		send_keystroke(keys[row][col]);
 		break;
@@ -856,10 +803,10 @@ void handle_sw_event(switch_event_t* this_sw_event)
 	case MODE_DOCKER: {
 		const keymap_t keys[5][4] = {
 			{{"", 0, 0}, {"", 0, 0}, {"", 0, 0}, {"", 0, 0}},
+			{{"", 0, 0}, {"", 0, 0}, {"", 0, 0}, {"", 0, 0}},
 			{{"", 0, 0}, {"cd ~/composes/torchic", 0, 0}, {"", 0, 0}, {"cd ~/composes/treecko", 0, 0}},
 			{{"", 0, 0}, {"docker ps", 0, 0}, {"nvim compose.yml", 0, 0}, {"docker compose logs -f", 0, 0}},
 			{{"docker compose up", 0, 0}, {"docker compose down", 0, 0}, {"docker compose pull", 0, 0}, {"docker compose up -d", 0, 0}},
-			{{"", 0, 0}, {"", 0, 0}, {"", 0, 0}, {"", 0, 0}},
 		};
 		send_keystroke(keys[row][col]);
 		break;
@@ -869,7 +816,7 @@ void handle_sw_event(switch_event_t* this_sw_event)
 		send_keystroke(map_to_function(this_sw_event->id));
 		break;
 	}
-	
+
 	default:
 		break;
 	}
