@@ -389,6 +389,26 @@ void draw_current_mode(void)
 	//     draw_keypad(keys);
 	// }
 
+	if (current_mode == MODE_ARROWPAD) {
+		const char *keys[10][4] = {
+			{"Esc", "Up", NULL, NULL},
+			{NULL, NULL, NULL, NULL},
+
+			{"<-", "Down", "->", NULL},
+			{NULL, NULL, NULL, NULL},
+
+			{"Left", NULL, NULL, NULL},
+			{"Ctrl", NULL, NULL, NULL},
+
+			{NULL, "Esc", "Up", NULL},
+			{NULL, NULL, NULL, NULL},
+
+			{"Left", "<-", "Down", "->"},
+			{"Ctrl", NULL, NULL, NULL},
+		};
+		draw_keypad(keys);
+	}
+
 	if (current_mode == MODE_IDE)
 	{
 		const char *keys[10][4] = {
@@ -409,15 +429,6 @@ void draw_current_mode(void)
 		};
 		draw_keypad(keys);
 	}
-
-	// if (current_mode == MODE_IDE_2) {
-	//     const char *keys[3][3] = {
-	//         {nullptr,	nullptr,	"Refs"},
-	//         {nullptr,	nullptr,	"SpMov R"},
-	//         {nullptr,	"Rename",	"Splt R"}
-	//     };
-	//     draw_keypad(keys);
-	// }
 
 	ssd1306_UpdateScreen();
 }
@@ -811,6 +822,17 @@ void handle_sw_event(switch_event_t* this_sw_event)
 		break;
 	}
 
+	case MODE_ARROWPAD: {
+		const keymap_t keys[5][4] = {
+			{{NULL, HID_KEY_ESCAPE, 0}, {NULL, HID_KEY_ARROW_UP, 0}, {NULL, 0, 0}, {NULL, 0, 0}},
+			{{NULL, HID_KEY_ARROW_LEFT, 0}, {NULL, HID_KEY_ARROW_DOWN, 0}, {NULL, HID_KEY_ARROW_RIGHT, 0}, {NULL, 0, 0}},
+			{{NULL, HID_KEY_CONTROL_LEFT, 0}, {NULL, 0, 0}, {NULL, 0, 0}, {NULL, 0, 0}},
+			{{NULL, 0, 0}, {NULL, HID_KEY_ESCAPE, 0}, {NULL, HID_KEY_ARROW_UP, 0}, {NULL, 0, 0}},
+			{{NULL, HID_KEY_CONTROL_LEFT, 0}, {NULL, HID_KEY_ARROW_LEFT, 0}, {NULL, HID_KEY_ARROW_DOWN, 0}, {NULL, HID_KEY_ARROW_RIGHT, 0}},
+		};
+		send_keystroke(keys[row][col]);
+	}
+
 	default:
 		break;
 	}
@@ -917,6 +939,7 @@ void app_main(void)
 	ESP_LOGI(SETUP_TAG, "Initializing UI");
 	neopixel_SetPixel(neopixel, &startup_pixels[1], 1);
 	draw_ui();
+	reset_variables();
 	last_interaction_us = esp_timer_get_time();
 
 	ESP_LOGI(SETUP_TAG, "Initialization done! Starting tasks...");
