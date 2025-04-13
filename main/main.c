@@ -22,6 +22,7 @@
 #include <math.h>
 #include <semphr.h>
 #include "freertos/queue.h"
+#include "bluetooth_task.h"
 
 #define NEOPIXEL_PIN GPIO_NUM_48
 #define MAIN_TAG "Main"
@@ -202,7 +203,7 @@ void neopixel_BreatheEffect(tNeopixelContext neopixel, uint16_t duration_ms)
 		float phase = (float)i / step_count * M_PI; // 0 to π for one breath
 		uint8_t brightness = (uint8_t)(min_brightness + (max_brightness * sin(phase)));
 
-		tNeopixel pixel = {0, NP_RGB(brightness, 0, 0)}; // Green with varying brightness
+		tNeopixel pixel = {0, NP_RGB(0, 0, brightness)}; // Green with varying brightness
 		neopixel_SetPixel(neopixel, &pixel, 1);
 		vTaskDelay(pdMS_TO_TICKS(step_delay));
 	}
@@ -353,10 +354,10 @@ void draw_current_mode(void)
 
 	if (current_mode == MODE_DOCKER) {
 		const char *keys[10][4] = {
-			{NULL, NULL, NULL, NULL},
-			{NULL, NULL, NULL, NULL},
+			{"Do", NULL, NULL, NULL},
+			{"it!", NULL, NULL, NULL},
 
-			{NULL, NULL, NULL, NULL},
+			{"Prune", NULL, NULL, NULL},
 			{NULL, NULL, NULL, NULL},
 
 			{NULL, "Tor", NULL, "Tree"},
@@ -450,8 +451,14 @@ void draw_ui(void)
 	}
 	else
 	{
-		ssd1306_SetCursor(109, 3);
-		ssd1306_WriteString("?", Font_7x10, White);
+		if (bluetooth_status == BT_CONNECTED)
+		{
+			ssd1306_SetCursor(109, 3);
+			ssd1306_WriteString("BT", Font_7x10, White);
+		} else {
+			ssd1306_SetCursor(109, 3);
+			ssd1306_WriteString("?", Font_7x10, White);
+		}
 	}
 
 	draw_current_mode();
@@ -801,8 +808,8 @@ void handle_sw_event(switch_event_t* this_sw_event)
 
 	case MODE_DOCKER: {
 		const keymap_t keys[5][4] = {
-			{{"", 0, 0}, {"", 0, 0}, {"", 0, 0}, {"", 0, 0}},
-			{{"", 0, 0}, {"", 0, 0}, {"", 0, 0}, {"", 0, 0}},
+			{{"docker compose pull && docker compose down && docker compose up -d", 0, 0}, {"", 0, 0}, {"", 0, 0}, {"", 0, 0}},
+			{{"docker system prune -a", 0, 0}, {"", 0, 0}, {"", 0, 0}, {"", 0, 0}},
 			{{"", 0, 0}, {"cd ~/composes/torchic", 0, 0}, {"", 0, 0}, {"cd ~/composes/treecko", 0, 0}},
 			{{"", 0, 0}, {"docker ps", 0, 0}, {"nvim compose.yml", 0, 0}, {"docker compose logs -f", 0, 0}},
 			{{"docker compose up", 0, 0}, {"docker compose down", 0, 0}, {"docker compose pull", 0, 0}, {"docker compose up -d", 0, 0}},
@@ -934,7 +941,10 @@ void app_main(void)
 		.configuration_descriptor = hid_configuration_descriptor,
 	};
 	ESP_ERROR_CHECK(tinyusb_driver_install(&tusb_cfg));
-	vTaskDelay(pdMS_TO_TICKS(1500));
+	vTaskDelay(pdMS_TO_TICKS(1500)); // Is this really necessary?
+
+	ESP_LOGI(SETUP_TAG, "Initializing BLE");
+	my_bt_init();
 
 	ESP_LOGI(SETUP_TAG, "Initializing UI");
 	neopixel_SetPixel(neopixel, &startup_pixels[1], 1);

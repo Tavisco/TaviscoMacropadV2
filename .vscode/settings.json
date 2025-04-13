@@ -1,13 +1,12 @@
 {
     "C_Cpp.intelliSenseEngine": "default",
-    "idf.espIdfPath": "/Users/opinheiro/esp/v5.4/esp-idf",
-    "idf.pythonInstallPath": "/usr/local/bin/python3",
+    "idf.espIdfPath": "/opt/esp/idf",
+    "idf.pythonInstallPath": "/usr/bin/python",
     "idf.openOcdConfigs": [
-        "interface/ftdi/esp32_devkitj_v1.cfg",
-        "target/esp32s3.cfg"
+        "board/esp32s3-builtin.cfg"
     ],
-    "idf.port": "/dev/tty.wchusbserial58750100931",
-    "idf.toolsPath": "/Users/opinheiro/.espressif",
+    "idf.port": "/dev/ttyACM0",
+    "idf.toolsPath": "/opt/esp",
     "idf.customExtraVars": {
         "IDF_TARGET": "esp32s3"
     },
@@ -22,6 +21,9 @@
         "stdio.h": "c",
         "task.h": "c",
         "gpio.h": "c",
-        "__locale": "c"
+        "__locale": "c",
+        "esp_hidd.h": "c",
+        "esp_hid_gap.h": "c",
+        "esp_bt_main.h": "c"
     }
 }
