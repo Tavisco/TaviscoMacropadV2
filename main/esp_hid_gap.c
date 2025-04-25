@@ -662,7 +662,7 @@
          .include_name = true,
          .include_txpower = true,
          .min_interval = 0x0006, //slave connection min interval, Time = min_interval * 1.25 msec
-         .max_interval = 0x0010, //slave connection max interval, Time = max_interval * 1.25 msec
+         .max_interval = 0x0f10, //slave connection max interval, Time = max_interval * 1.25 msec
          .appearance = appearance,
          .manufacturer_len = 0,
          .p_manufacturer_data =  NULL,
@@ -673,7 +673,7 @@
          .flag = 0x6,
      };
  
-     esp_ble_auth_req_t auth_req = ESP_LE_AUTH_REQ_SC_MITM_BOND;
+     esp_ble_auth_req_t auth_req = ESP_LE_AUTH_REQ_SC_MITM;
      //esp_ble_io_cap_t iocap = ESP_IO_CAP_OUT;//you have to enter the key on the host
      //esp_ble_io_cap_t iocap = ESP_IO_CAP_IN;//you have to enter the key on the device
      esp_ble_io_cap_t iocap = ESP_IO_CAP_IO;//you have to agree that key matches on both
@@ -682,6 +682,8 @@
      uint8_t rsp_key = ESP_BLE_ENC_KEY_MASK | ESP_BLE_ID_KEY_MASK;
      uint8_t key_size = 16; //the key size should be 7~16 bytes
      uint32_t passkey = 1234;//ESP_IO_CAP_OUT
+     uint8_t auth_option = ESP_BLE_ONLY_ACCEPT_SPECIFIED_AUTH_ENABLE;
+     uint8_t oob_support = ESP_BLE_OOB_DISABLE;
  
      if ((ret = esp_ble_gap_set_security_param(ESP_BLE_SM_AUTHEN_REQ_MODE, &auth_req, 1)) != ESP_OK) {
          ESP_LOGE(TAG, "GAP set_security_param AUTHEN_REQ_MODE failed: %d", ret);
@@ -722,6 +724,16 @@
          ESP_LOGE(TAG, "GAP config_adv_data failed: %d", ret);
          return ret;
      }
+
+    if ((ret = esp_ble_gap_set_security_param(ESP_BLE_SM_ONLY_ACCEPT_SPECIFIED_SEC_AUTH, &auth_option, sizeof(uint8_t))) != ESP_OK) {
+        ESP_LOGE(TAG, "GAP ESP_BLE_SM_ONLY_ACCEPT_SPECIFIED_SEC_AUTH failed: %d", ret);
+        return ret;
+    }
+
+    if ((ret = esp_ble_gap_set_security_param(ESP_BLE_SM_OOB_SUPPORT, &oob_support, sizeof(uint8_t))) != ESP_OK) {
+        ESP_LOGE(TAG, "GAP ESP_BLE_SM_OOB_SUPPORT failed: %d", ret);
+        return ret;
+    }
  
      return ret;
  }

@@ -159,7 +159,6 @@ static esp_hid_device_config_t ble_hid_config = {
     .report_maps_len    = 1
 };
 
-
 void ble_hid_task_start_up(void)
 {
     bluetooth_status = BT_CONNECTED;
